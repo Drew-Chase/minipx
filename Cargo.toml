@@ -1,0 +1,22 @@
+[package]
+name = "minipx"
+version = "0.1.0"
+edition = "2024"
+description = "A simple, configurable TCP/IP reverse proxy"
+authors = ["Drew Chase"]
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
+hyper = { version = "1", features = ["http1", "http2", "server"] }
+hyper-reverse-proxy = "0.5"
+rustls = "0.23"
+rustls-acme = "0.14"
+tokio-rustls = "0.26"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+anyhow = "1.0.99"
+clap = { version = "4", features = ["derive", "color", "help", "suggestions", "wrap_help", "error-context", "usage", "string", "unicode"] }
+log = "0.4.27"
+pretty_env_logger = { version = "0.5.0" }
+notify = {version = "8.2.0"}
