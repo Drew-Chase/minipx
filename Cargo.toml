@@ -8,8 +8,8 @@ license = "MIT"
 
 [dependencies]
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
-hyper = { version = "1", features = ["http1", "http2", "server"] }
-hyper-reverse-proxy = "0.5"
+hyper = { version = "0.14", features = ["full"] }
+hyper-reverse-proxy = {version = "0.5.1"}
 rustls = "0.23"
 rustls-acme = "0.14"
 tokio-rustls = "0.26"
