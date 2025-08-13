@@ -42,8 +42,14 @@ impl Config {
     pub fn get_routes(&self) -> &HashMap<String, u16> {
         &self.routes
     }
-    pub fn get_route(&self, key: impl AsRef<String>) -> Option<&u16> {
-        self.routes.get(key.as_ref())
+    pub fn lookup_host(&self, key: impl AsRef<str>) -> Option<&u16> {
+        let host = key.as_ref();
+        if let Some(port) = self.routes.get(host) {
+            return Some(port);
+        }
+        self.routes.iter()
+            .find(|(k, _)| k.starts_with("*.") && host.ends_with(&k[1..]))
+            .map(|(_, v)| v)
     }
 
     pub async fn get() -> Self {
