@@ -43,7 +43,6 @@ pub struct ProxyRoute {
     redirect_to_https: bool,
 }
 
-
 impl Default for Config {
     fn default() -> Self {
         Self::new()
@@ -55,14 +54,17 @@ impl Config {
         Self {
             email: "email@example.com".to_string(),
             port: 80,
-            cache_dir: String::new(),
-            routes: HashMap::from([("example.com".to_string(), ProxyRoute{
-                host: "localhost".to_string(),
-                path: "/".to_string(),
-                port: 8080,
-                protocol: "http".to_string(),
-                redirect_to_https: false,
-            })]),
+            cache_dir: "./cache".to_string(),
+            routes: HashMap::from([(
+                "example.com".to_string(),
+                ProxyRoute {
+                    host: "localhost".to_string(),
+                    path: String::new(),
+                    port: 8080,
+                    protocol: "http".to_string(),
+                    redirect_to_https: false,
+                },
+            )]),
         }
     }
 
@@ -107,13 +109,13 @@ impl Config {
         let config = if path.exists() {
             let content = tokio::fs::read_to_string(path).await?;
             let result = serde_json::from_str::<Config>(&content);
-            let cfg = if let Err(e) = result{
+            let cfg = if let Err(e) = result {
                 error!("Failed to parse config file: {}", e);
                 Self::save_default(path).await?;
                 Self::new()
-            }else if let Ok(cfg) = result{
+            } else if let Ok(cfg) = result {
                 cfg
-            }else{
+            } else {
                 unreachable!()
             };
             cfg
@@ -160,7 +162,7 @@ impl Config {
         });
     }
 }
-impl ProxyRoute{
+impl ProxyRoute {
     pub fn get_host(&self) -> &String {
         &self.host
     }
@@ -177,6 +179,9 @@ impl ProxyRoute{
         self.redirect_to_https
     }
     pub fn get_full_url(&self) -> String {
-        format!("{}://{}:{}{}", self.protocol, self.host, self.port, self.path)
+        format!(
+            "{}://{}:{}{}",
+            self.protocol, self.host, self.port, self.path
+        )
     }
 }
