@@ -20,4 +20,3 @@ clap = { version = "4", features = ["derive", "color", "help", "suggestions", "w
 log = "0.4.27"
 pretty_env_logger = { version = "0.5.0" }
 notify = {version = "8.2.0"}
-async-stream = "0.3.6"

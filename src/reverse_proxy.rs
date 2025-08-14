@@ -6,6 +6,7 @@ use hyper::{header, Body, Request, Response, StatusCode};
 use log::{error, info, warn};
 use std::net::IpAddr;
 use std::{convert::Infallible, net::SocketAddr};
+use rustls_acme::acme;
 use tokio::sync::oneshot;
 
 pub async fn start_rp_server() -> Result<()> {
@@ -123,7 +124,8 @@ async fn handle_request(client_ip: IpAddr, req: Request<Body>) -> Result<Respons
     }
 
     let route = route.unwrap();
-    info!("Received request from {ip} for {host} redirecting to 127.0.0.1:{port:?}{path}", ip=client_ip, path=uri, host=domain, port=route);
+    let route = route.get_full_url();
+    info!("Received request from {ip} for {host} redirecting to {route}{path}", ip=client_ip, path=uri, host=domain, route=route);
     match hyper_reverse_proxy::call(
         client_ip,
         route.as_str(),

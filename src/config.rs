@@ -1,5 +1,5 @@
 use anyhow::Result;
-use log::{debug, trace, warn};
+use log::{debug, error, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -28,9 +28,21 @@ pub struct Config {
     email: String,
     // Port to listen on
     port: u16,
+    // Directory to store cached files
+    cache_dir: String,
     // Host to route to
-    routes: HashMap<String, String>,
+    routes: HashMap<String, ProxyRoute>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyRoute {
+    host: String,
+    path: String,
+    port: u16,
+    protocol: String,
+    redirect_to_https: bool,
+}
+
 
 impl Default for Config {
     fn default() -> Self {
@@ -43,20 +55,30 @@ impl Config {
         Self {
             email: "email@example.com".to_string(),
             port: 80,
-            routes: HashMap::from([("example.com".to_string(), "http://localhost:8080".to_string())]),
+            cache_dir: String::new(),
+            routes: HashMap::from([("example.com".to_string(), ProxyRoute{
+                host: "localhost".to_string(),
+                path: "/".to_string(),
+                port: 8080,
+                protocol: "http".to_string(),
+                redirect_to_https: false,
+            })]),
         }
     }
 
     pub fn get_email(&self) -> &String {
         &self.email
     }
-    pub fn get_routes(&self) -> &HashMap<String, String> {
+    pub fn get_cache_dir(&self) -> &String {
+        &self.cache_dir
+    }
+    pub fn get_routes(&self) -> &HashMap<String, ProxyRoute> {
         &self.routes
     }
     pub fn get_port(&self) -> u16 {
         self.port
     }
-    pub fn lookup_host(&self, key: impl AsRef<str>) -> Option<&String> {
+    pub fn lookup_host(&self, key: impl AsRef<str>) -> Option<&ProxyRoute> {
         let host = key.as_ref();
         if let Some(route) = self.routes.get(host) {
             return Some(route);
@@ -84,7 +106,17 @@ impl Config {
         debug!("Loading config from: {}", path.display());
         let config = if path.exists() {
             let content = tokio::fs::read_to_string(path).await?;
-            serde_json::from_str(&content)?
+            let result = serde_json::from_str::<Config>(&content);
+            let cfg = if let Err(e) = result{
+                error!("Failed to parse config file: {}", e);
+                Self::save_default(path).await?;
+                Self::new()
+            }else if let Ok(cfg) = result{
+                cfg
+            }else{
+                unreachable!()
+            };
+            cfg
         } else {
             warn!("Config file not found, using default config");
             Self::save_default(path).await?;
@@ -126,5 +158,25 @@ impl Config {
                 }
             }
         });
+    }
+}
+impl ProxyRoute{
+    pub fn get_host(&self) -> &String {
+        &self.host
+    }
+    pub fn get_path(&self) -> &String {
+        &self.path
+    }
+    pub fn get_port(&self) -> u16 {
+        self.port
+    }
+    pub fn get_protocol(&self) -> &String {
+        &self.protocol
+    }
+    pub fn get_redirect_to_https(&self) -> bool {
+        self.redirect_to_https
+    }
+    pub fn get_full_url(&self) -> String {
+        format!("{}://{}:{}{}", self.protocol, self.host, self.port, self.path)
     }
 }
