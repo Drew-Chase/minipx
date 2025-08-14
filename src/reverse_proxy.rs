@@ -1,12 +1,11 @@
 use crate::config::Config;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
-use hyper::{header, Body, Request, Response, StatusCode};
+use hyper::{Body, Request, Response, StatusCode, header};
 use log::{error, info, warn};
 use std::net::IpAddr;
 use std::{convert::Infallible, net::SocketAddr};
-use rustls_acme::acme;
 use tokio::sync::oneshot;
 
 pub async fn start_rp_server() -> Result<()> {
@@ -116,7 +115,7 @@ async fn handle_request(client_ip: IpAddr, req: Request<Body>) -> Result<Respons
     let route = config.lookup_host(&domain);
 
     if route.is_none() {
-        warn!("Received request from {ip} for unknown host {host}", ip=client_ip, host=domain);
+        warn!("Received request from {ip} for unknown host {host}", ip = client_ip, host = domain);
         return Ok(Response::builder()
             .status(StatusCode::NOT_FOUND)
             .header("Content-Type", "text/plain")
@@ -125,17 +124,15 @@ async fn handle_request(client_ip: IpAddr, req: Request<Body>) -> Result<Respons
 
     let route = route.unwrap();
     let route = route.get_full_url();
-    info!("Received request from {ip} for {host} redirecting to {route}{path}", ip=client_ip, path=uri, host=domain, route=route);
-    match hyper_reverse_proxy::call(
-        client_ip,
-        route.as_str(),
-        req,
-    )
-    .await
-    {
+    info!(
+        "Received request from {ip} for {host} redirecting to {route}{path}",
+        ip = client_ip,
+        path = uri,
+        host = domain,
+        route = route
+    );
+    match hyper_reverse_proxy::call(client_ip, route.as_str(), req).await {
         Ok(response) => Ok(response),
-        Err(_error) => Ok(Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Body::empty())?),
+        Err(_error) => Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty())?),
     }
 }

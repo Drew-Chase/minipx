@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::OnceLock;
-use tokio::sync::broadcast;
 use tokio::sync::RwLock;
+use tokio::sync::broadcast;
 
 static LOADED_CONFIG: OnceLock<RwLock<Config>> = OnceLock::new();
 // Global broadcaster for config change events
@@ -85,10 +85,7 @@ impl Config {
         if let Some(route) = self.routes.get(host) {
             return Some(route);
         }
-        self.routes
-            .iter()
-            .find(|(k, _)| k.starts_with("*.") && host.ends_with(&k[1..]))
-            .map(|(_, v)| v)
+        self.routes.iter().find(|(k, _)| k.starts_with("*.") && host.ends_with(&k[1..])).map(|(_, v)| v)
     }
 
     pub async fn get() -> Self {
@@ -179,9 +176,6 @@ impl ProxyRoute {
         self.redirect_to_https
     }
     pub fn get_full_url(&self) -> String {
-        format!(
-            "{}://{}:{}{}",
-            self.protocol, self.host, self.port, self.path
-        )
+        format!("{}://{}:{}{}", self.protocol, self.host, self.port, self.path)
     }
 }

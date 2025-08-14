@@ -6,18 +6,14 @@ use crate::command_line_arguments::MinipxArguments;
 use crate::config::Config;
 use anyhow::Result;
 use clap::Parser;
-use log::{info, trace, LevelFilter};
+use log::{LevelFilter, info, trace};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = MinipxArguments::parse();
     pretty_env_logger::env_logger::builder()
         .format_timestamp(None)
-        .filter_level(if args.verbose {
-            LevelFilter::Trace
-        } else {
-            LevelFilter::Info
-        })
+        .filter_level(if args.verbose { LevelFilter::Trace } else { LevelFilter::Info })
         .init();
 
     info!("Starting minipx");
