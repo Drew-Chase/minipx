@@ -12,6 +12,6 @@ pub struct MinipxArguments {
     pub(crate) config_path: String,
     #[arg(short = 'v', long = "verbose", help = "Enable verbose logging")]
     pub(crate) verbose: bool,
-    #[arg(long = "watch", help = "Watch the configuration file for changes")]
+    #[arg(short='w', long = "watch", help = "Watch the configuration file for changes")]
     pub(crate) watch_config: bool,
 }
