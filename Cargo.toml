@@ -1,6 +1,6 @@
 [package]
 name = "minipx"
-version = "0.1.0"
+version = "0.0.1-alpha"
 edition = "2024"
 description = "A simple, configurable TCP/IP reverse proxy"
 authors = ["Drew Chase"]
@@ -10,9 +10,7 @@ license = "MIT"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
 hyper = { version = "0.14", features = ["full"] }
 hyper-reverse-proxy = {version = "0.5.1"}
-rustls = "0.23"
 rustls-acme = { version = "0.14", features = ["tokio"] }
-tokio-rustls = "0.26"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 anyhow = "1.0.99"
