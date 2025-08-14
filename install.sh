@@ -56,7 +56,7 @@ fi
 echo "Downloading minipx artifacts..."
 
 # GitHub API endpoint for repository releases (returns JSON)
-releases_url="https://github.com/Drew-Chase/minipx/releases"
+releases_url="https://api.github.com/repos/Drew-Chase/minipx/releases"
 
 # Fetch the releases JSON; if it fails, abort.
 json="$($downloader "$releases_url")" || { echo "Failed to fetch releases info."; exit 1; }
