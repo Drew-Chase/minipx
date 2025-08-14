@@ -30,6 +30,9 @@ pub struct Config {
     port: u16,
     // Directory to store cached files
     cache_dir: String,
+    // Enable or disable the SSL/HTTPS server globally
+    #[serde(default = "default_ssl_enabled")]
+    ssl_enabled: bool,
     // Host to route to
     routes: HashMap<String, ProxyRoute>,
 }
@@ -55,6 +58,7 @@ impl Config {
             email: "email@example.com".to_string(),
             port: 80,
             cache_dir: "./cache".to_string(),
+            ssl_enabled: true,
             routes: HashMap::from([(
                 "example.com".to_string(),
                 ProxyRoute {
@@ -86,6 +90,20 @@ impl Config {
             return Some(route);
         }
         self.routes.iter().find(|(k, _)| k.starts_with("*.") && host.ends_with(&k[1..])).map(|(_, v)| v)
+    }
+
+    /// Returns a list of unique domain names from the routes, excluding wildcard entries,
+    /// and only for routes where protocol == "https" (case-insensitive).
+    /// These domains are used to request ACME certificates.
+    pub fn get_domains_for_acme(&self) -> Vec<String> {
+        use std::collections::BTreeSet;
+        let mut set: BTreeSet<String> = BTreeSet::new();
+        for (domain, route) in &self.routes {
+            if !domain.starts_with("*.") && route.protocol.eq_ignore_ascii_case("https") {
+                set.insert(domain.clone());
+            }
+        }
+        set.into_iter().collect()
     }
 
     pub async fn get() -> Self {
@@ -177,5 +195,84 @@ impl ProxyRoute {
     }
     pub fn get_full_url(&self) -> String {
         format!("{}://{}:{}{}", self.protocol, self.host, self.port, self.path)
+    }
+}
+
+fn default_ssl_enabled() -> bool { true }
+
+impl Config {
+    pub fn is_ssl_enabled(&self) -> bool { self.ssl_enabled }
+
+    pub fn is_email_valid(&self) -> bool {
+        let email = self.get_email();
+        // very simple validation: one '@', no spaces, local and domain parts non-empty, domain contains '.'
+        if email.is_empty() || email.contains(' ') { return false; }
+        let parts: Vec<&str> = email.split('@').collect();
+        if parts.len() != 2 { return false; }
+        let (local, domain) = (parts[0], parts[1]);
+        if local.is_empty() || domain.is_empty() { return false; }
+        if !domain.contains('.') { return false; }
+        // ensure domain is valid-ish
+        Self::validate_domain(domain)
+    }
+
+    pub fn validate_domain(domain: &str) -> bool {
+        // Disallow wildcard entries here; we cannot obtain wildcard certs with TLS-ALPN/HTTP-01
+        if domain.starts_with("*.") { return false; }
+        if domain.len() > 253 || !domain.contains('.') { return false; }
+        // Only allow a-z, A-Z, 0-9, '-', '.'; labels 1..=63, cannot start/end with '-'
+        let mut last_dot = true;
+        for ch in domain.chars() {
+            if ch == '.' {
+                last_dot = true;
+            } else {
+                last_dot = false;
+            }
+            if !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '.') { return false; }
+        }
+        if last_dot { return false; } // cannot end with a dot
+        for label in domain.split('.') {
+            if label.is_empty() || label.len() > 63 { return false; }
+            if label.starts_with('-') || label.ends_with('-') { return false; }
+        }
+        true
+    }
+
+    /// Returns (valid_domains, invalid_domains) for ACME based on current routes.
+    pub fn get_valid_domains_for_acme(&self) -> (Vec<String>, Vec<String>) {
+        use std::collections::BTreeSet;
+        let mut valid_set: BTreeSet<String> = BTreeSet::new();
+        let mut invalid: Vec<String> = Vec::new();
+        for (domain, route) in &self.routes {
+            if domain.starts_with("*.") {
+                invalid.push(domain.clone());
+                continue;
+            }
+            // Only consider routes that intend to serve HTTPS at the frontend
+            if !route.protocol.eq_ignore_ascii_case("https") {
+                continue; // neither valid nor invalid; just not used for ACME
+            }
+            if Self::validate_domain(domain) {
+                valid_set.insert(domain.clone());
+            } else {
+                invalid.push(domain.clone());
+            }
+        }
+        (valid_set.into_iter().collect(), invalid)
+    }
+
+    /// True if this config can serve TLS for the specific host.
+    pub fn can_serve_tls_for_host(&self, host: &str) -> bool {
+        if !self.is_ssl_enabled() || !self.is_email_valid() { return false; }
+        // Route must exist and be configured for HTTPS at the frontend
+        if let Some(route) = self.lookup_host(host) {
+            if !route.get_protocol().eq_ignore_ascii_case("https") {
+                return false;
+            }
+        } else {
+            return false;
+        }
+        let (valid, _invalid) = self.get_valid_domains_for_acme();
+        valid.iter().any(|d| d == host)
     }
 }

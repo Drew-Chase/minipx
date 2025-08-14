@@ -12,7 +12,7 @@ pub async fn start_rp_server() -> Result<()> {
     loop {
         let config = Config::get().await;
         let current_port = config.get_port();
-        let addr = SocketAddr::from(([127, 0, 0, 1], current_port));
+        let addr = SocketAddr::from(([0, 0, 0, 0], current_port));
 
         let mut updates = Config::subscribe();
 
@@ -22,7 +22,7 @@ pub async fn start_rp_server() -> Result<()> {
                 Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
                     let client_ip = remote_addr;
                     async move {
-                        match handle_request(client_ip, req).await {
+                        match handle_request_with_scheme(client_ip, req, false).await {
                             Ok(resp) => Ok::<_, Infallible>(resp),
                             Err(e) => {
                                 error!("handle_request error from {}: {}", client_ip, e);
@@ -107,7 +107,7 @@ fn extract_host(req: &Request<Body>) -> Option<String> {
     req.uri().host().map(|h| h.to_string())
 }
 
-async fn handle_request(client_ip: IpAddr, req: Request<Body>) -> Result<Response<Body>> {
+pub async fn handle_request_with_scheme(client_ip: IpAddr, req: Request<Body>, is_tls: bool) -> Result<Response<Body>> {
     let uri = req.uri().clone();
     let domain = extract_host(&req).ok_or(anyhow!("No host in URI or Host header"))?;
 
@@ -123,15 +123,32 @@ async fn handle_request(client_ip: IpAddr, req: Request<Body>) -> Result<Respons
     }
 
     let route = route.unwrap();
-    let route = route.get_full_url();
+
+    // If this is an HTTP request and the route requires HTTPS, redirect only if TLS can be served for this host.
+    if !is_tls && route.get_redirect_to_https() {
+        if config.can_serve_tls_for_host(&domain) {
+            let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+            let location = format!("https://{}{}", domain, path_and_query);
+            return Ok(
+                Response::builder()
+                    .status(StatusCode::MOVED_PERMANENTLY)
+                    .header(header::LOCATION, location)
+                    .body(Body::empty())?
+            );
+        } else {
+            warn!("HTTPS redirect requested for host '{}' but TLS is unavailable (ssl disabled, invalid email, or invalid domain). Serving over HTTP.", domain);
+        }
+    }
+
+    let target = route.get_full_url();
     info!(
         "Received request from {ip} for {host} redirecting to {route}{path}",
         ip = client_ip,
         path = uri,
         host = domain,
-        route = route
+        route = target
     );
-    match hyper_reverse_proxy::call(client_ip, route.as_str(), req).await {
+    match hyper_reverse_proxy::call(client_ip, target.as_str(), req).await {
         Ok(response) => Ok(response),
         Err(_error) => Ok(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty())?),
     }

@@ -4,18 +4,19 @@ A simple, fast, and configurable TCP/IP reverse proxy written in Rust with autom
 
 ## Features
 
-- 🚀 **High Performance**: Built with Rust and Tokio for excellent performance and memory safety
-- 🔒 **Automatic SSL**: Integrated Let's Encrypt support with automatic certificate provisioning and renewal
-- 📝 **Configuration Management**: JSON-based configuration with hot-reload support
-- 🔄 **Live Updates**: Watch configuration files for changes and apply them without restart
-- 🌐 **Multi-Domain**: Support for multiple domains and routing rules
-- 📊 **Logging**: Configurable logging levels for monitoring and debugging
+- 🚀 High Performance: Built with Rust and Tokio for excellent performance and memory safety
+- 🔒 Automatic SSL (HTTPS): Integrated Let's Encrypt support with automatic certificate provisioning and renewal via ACME (TLS-ALPN-01)
+- 🌐 Multi-Domain: Serve multiple domains with individual certificates (no wildcard certs)
+- 🔁 Smart Redirects: Optional per-route HTTP→HTTPS redirects that only occur when TLS is actually available for that host
+- 🧩 Config Hot-Reload: JSON-based configuration with live updates and graceful restarts of the HTTPS server when needed
+- 🧰 SSL Toggle: Global config flag to enable/disable the HTTPS server without changing routes
+- 📊 Logging: Configurable logging levels for monitoring and debugging
 
 ## Quick Start
 
 ### Installation
 
-Download the latest release from the [releases page](https://github.com/Drew-Chase/minipx/releases) or build from source:
+Download the latest release from the releases page or build from source:
 
 ```bash
 git clone <repository-url>
@@ -25,19 +26,25 @@ cargo build --release
 
 ### Basic Usage
 
-1. Create a configuration file (see [Configuration](#configuration) section):
+1) Create a configuration file (see Configuration below), then run:
 
 ```bash
 minipx --config ./minipx.json
 ```
 
-2. Run with configuration watching enabled:
+2) Run with configuration watching enabled (hot-reload):
 
 ```bash
 minipx --watch --verbose --config ./config/config.json
 ```
 
-> **Note**: The configuration directory will be created automatically if it doesn't exist.
+Note: The configuration directory will be created automatically if it doesn't exist.
+
+## How It Runs
+
+- HTTP server listens on the configured port (default 80) on 0.0.0.0.
+- HTTPS server listens on port 443 on [::] (all IPv6/IPv4 via dual-stack), automatically handling ACME TLS-ALPN-01 challenges and serving TLS.
+- When a route has redirect_to_https = true, HTTP requests are redirected to HTTPS only if a certificate can be served for that host; otherwise, the request is served over HTTP and a warning is logged.
 
 ## CLI Options
 
@@ -71,16 +78,17 @@ Minipx uses a JSON configuration file to define proxy behavior, SSL settings, an
 
 ### Global Settings
 
-| Field       | Type   | Description                              | Default             |
-|-------------|--------|------------------------------------------|---------------------|
-| `email`     | string | Email for Let's Encrypt SSL certificates | `email@example.com` |
-| `port`      | number | Port for the proxy server to listen on   | `80`                |
-| `cache_dir` | string | Directory for SSL certificate cache      | `./cache`           |
-| `routes`    | object | Domain-to-route mapping configuration    | `{}`                |
+| Field         | Type    | Description                                          | Default             |
+|---------------|---------|------------------------------------------------------|---------------------|
+| `email`       | string  | Email for Let's Encrypt account (required for HTTPS) | `email@example.com` |
+| `port`        | number  | Port for the HTTP reverse proxy to listen on         | `80`                |
+| `cache_dir`   | string  | Directory for ACME account/certificate cache         | `./cache`           |
+| `ssl_enabled` | boolean | Enable or disable the HTTPS server globally          | `true`              |
+| `routes`      | object  | Domain-to-route mapping configuration                | `{}`                |
 
 ### Route Configuration
 
-Each route in the `routes` object maps a domain to proxy settings:
+Each entry under `routes` maps a domain (e.g., "api.example.com") to proxy settings.
 
 | Field               | Type    | Description                                    | Default     |
 |---------------------|---------|------------------------------------------------|-------------|
@@ -90,6 +98,10 @@ Each route in the `routes` object maps a domain to proxy settings:
 | `protocol`          | string  | Backend protocol (`http` or `https`)           | `http`      |
 | `redirect_to_https` | boolean | Force HTTPS redirect for HTTP requests         | `false`     |
 
+Notes:
+
+- Wildcard route keys (like "*.example.com") are supported for routing lookups, but wildcard certificates are NOT requested. Only exact domains are used for ACME.
+
 ### Example Configuration
 
 ```json
@@ -97,6 +109,7 @@ Each route in the `routes` object maps a domain to proxy settings:
   "email": "admin@mydomain.com",
   "port": 80,
   "cache_dir": "./ssl-cache",
+  "ssl_enabled": true,
   "routes": {
     "api.mydomain.com": {
       "host": "localhost",
@@ -121,30 +134,40 @@ Each route in the `routes` object maps a domain to proxy settings:
 }
 ```
 
-## SSL Certificate Management
+## SSL / ACME (Let's Encrypt)
 
-Minipx automatically handles SSL certificates using Let's Encrypt:
+Minipx uses rustls-acme with the Let's Encrypt production directory.
 
-- **Automatic Provisioning**: Certificates are automatically requested when a new domain is accessed
-- **Auto-Renewal**: Certificates are automatically renewed before expiration
-- **Caching**: Certificates are cached in the specified `cache_dir` to avoid rate limits
-- **ACME Challenge**: Uses HTTP-01 challenge type for domain validation
+- Validation: TLS-ALPN-01 (served on port 443). No HTTP-01 is used.
+- Certificate caching: Stored in `cache_dir` to avoid rate limits.
+- Multi-domain: Certificates are requested for all valid, exact domains present as keys in `routes`.
+- Wildcards: Not supported for certificates. Wildcard route keys are ignored for ACME.
 
-### Requirements for SSL
+Requirements:
 
-- Domain must resolve to the server running Minipx
-- Port 80 must be accessible for ACME challenges
-- Valid email address must be provided in configuration
+- Domains must resolve to this server.
+- Port 443 must be publicly accessible for TLS-ALPN-01 validation and HTTPS traffic.
+- A valid email must be provided for the ACME account. If the email is invalid, the HTTPS server won’t start and will wait for a valid config.
+
+Behavior with invalid config:
+
+- If `ssl_enabled` is false: HTTPS server does not start (waits for enablement via hot-reload).
+- If `email` is invalid: HTTPS server waits until a valid email is provided.
+- If some domains are invalid: HTTPS starts for valid domains only and logs the skipped ones.
+- HTTP→HTTPS redirects occur only when a certificate can be served for that host; otherwise traffic is served over HTTP and a warning is logged.
+
+Hot-reload behavior:
+
+- Changes to `ssl_enabled`, `email`, `cache_dir`, or the set of valid domains trigger a graceful HTTPS server restart.
 
 ## Logging
 
 Minipx uses structured logging with different levels:
 
-- **Error**: Critical errors and failures
-- **Warn**: Warning messages and recoverable errors
-- **Info**: General information about proxy operations
-- **Debug**: Detailed debugging information (enabled with `--verbose`)
-- **Trace**: Very detailed execution traces (enabled with `--verbose`)
+- Error: Critical errors and failures
+- Warn: Warning messages and recoverable errors
+- Info: General information about proxy operations
+- Debug/Trace: More detailed logs (enabled with `--verbose`)
 
 Set the `RUST_LOG` environment variable for custom log levels:
 
@@ -154,28 +177,24 @@ RUST_LOG=debug minipx --config config.json
 
 ## Troubleshooting
 
-### Common Issues
+Common issues:
 
-1. **Port 80 Permission Denied**
-    - Run with sudo or use a port >= 1024
-    - Ensure no other service is using port 80
+1) Binding to privileged ports (80/443)
 
-2. **SSL Certificate Failures**
-    - Verify domain DNS points to your server
-    - Check that port 80 is accessible from the internet
-    - Ensure email address is valid
+- On Linux/macOS, run with sudo or use capabilities (e.g., setcap) to bind <1024.
+- Ensure no other service is using the port.
 
-3. **Backend Connection Refused**
-    - Verify target service is running and accessible
-    - Check host, port, and protocol settings in configuration
+2) Certificate acquisition failures
 
-### Debug Mode
+- Verify DNS records resolve to this server.
+- Ensure port 443 is reachable from the internet.
+- Check that `cache_dir` is writable and persistent.
+- Confirm `email` is valid.
 
-Enable verbose logging for troubleshooting:
+3) Backend connection refused
 
-```bash
-minipx --verbose --config config.json
-```
+- Verify target service is running and reachable from Minipx.
+- Check `host`, `port`, and `protocol` in your route configuration.
 
 ## Contributing
 
@@ -183,15 +202,15 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ## License
 
-This project is licensed under the [MIT License—](LICENSE)see the LICENSE file for details.
+This project is licensed under the MIT License — see the LICENSE file for details.
 
 ## Dependencies
 
 Built with these excellent Rust crates:
 
-- **tokio** - Async runtime
-- **hyper** - HTTP implementation
-- **rustls** - TLS implementation
-- **rustls-acme** - Let's Encrypt integration
-- **serde** - Serialization framework
-- **clap** - Command line argument parsing
+- tokio — Async runtime
+- hyper — HTTP implementation
+- rustls — TLS implementation
+- rustls-acme — Let's Encrypt integration
+- serde — Serialization framework
+- clap — Command line argument parsing
