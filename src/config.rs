@@ -78,9 +78,6 @@ impl Config {
     pub fn get_cache_dir(&self) -> &String {
         &self.cache_dir
     }
-    pub fn get_routes(&self) -> &HashMap<String, ProxyRoute> {
-        &self.routes
-    }
     pub fn get_port(&self) -> u16 {
         self.port
     }
@@ -92,30 +89,12 @@ impl Config {
         self.routes.iter().find(|(k, _)| k.starts_with("*.") && host.ends_with(&k[1..])).map(|(_, v)| v)
     }
 
-    /// Returns a list of unique domain names from the routes, excluding wildcard entries,
-    /// and only for routes where protocol == "https" (case-insensitive).
-    /// These domains are used to request ACME certificates.
-    pub fn get_domains_for_acme(&self) -> Vec<String> {
-        use std::collections::BTreeSet;
-        let mut set: BTreeSet<String> = BTreeSet::new();
-        for (domain, route) in &self.routes {
-            if !domain.starts_with("*.") && route.protocol.eq_ignore_ascii_case("https") {
-                set.insert(domain.clone());
-            }
-        }
-        set.into_iter().collect()
-    }
-
     pub async fn get() -> Self {
         config_lock().read().await.clone()
     }
 
     pub fn subscribe() -> broadcast::Receiver<Config> {
         broadcaster().subscribe()
-    }
-
-    pub async fn subscribe_with_current() -> (Self, broadcast::Receiver<Config>) {
-        (Self::get().await, Self::subscribe())
     }
 
     pub async fn try_load(path: impl AsRef<Path>) -> Result<Self> {
@@ -178,15 +157,6 @@ impl Config {
     }
 }
 impl ProxyRoute {
-    pub fn get_host(&self) -> &String {
-        &self.host
-    }
-    pub fn get_path(&self) -> &String {
-        &self.path
-    }
-    pub fn get_port(&self) -> u16 {
-        self.port
-    }
     pub fn get_protocol(&self) -> &String {
         &self.protocol
     }
@@ -223,11 +193,7 @@ impl Config {
         // Only allow a-z, A-Z, 0-9, '-', '.'; labels 1..=63, cannot start/end with '-'
         let mut last_dot = true;
         for ch in domain.chars() {
-            if ch == '.' {
-                last_dot = true;
-            } else {
-                last_dot = false;
-            }
+            last_dot = ch == '.';
             if !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '.') { return false; }
         }
         if last_dot { return false; } // cannot end with a dot
