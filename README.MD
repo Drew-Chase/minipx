@@ -24,6 +24,21 @@ cd minipx
 cargo build --release
 ```
 
+### Linux (Easy)
+
+Install using the provided script:
+
+```bash
+sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/Drew-Chase/minipx/master/install.sh)" < /dev/tty
+```
+
+### Linux Uninstall (Easy)
+
+```bash
+sudo curl -sSL https://raw.githubusercontent.com/Drew-Chase/minipx/master/install.sh | bash -s -- --uninstall
+```
+
+
 ### Basic Usage
 
 1) Create a configuration file (see Configuration below), then run:
