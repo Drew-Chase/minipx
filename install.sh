@@ -140,7 +140,7 @@ echo "Creating systemd service file..."
 echo "$service_text" | sudo tee /etc/systemd/system/minipx.service >/dev/null
 sudo chmod 644 /etc/systemd/system/minipx.service
 sudo systemctl daemon-reload
-sudo systemctl start minipx
+sudo systemctl restart minipx
 sudo systemctl enable minipx
 echo "Systemd service 'minipx' created and started."
 echo "Edit the configuration files in ${config_path} to customize minipx."
