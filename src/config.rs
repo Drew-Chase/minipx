@@ -1,6 +1,5 @@
 use anyhow::Result;
 use log::{debug, error, trace, warn};
-use notify::EventKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -104,16 +103,13 @@ impl Config {
         let config = if path.exists() {
             let content = tokio::fs::read_to_string(path).await?;
             let result = serde_json::from_str::<Config>(&content);
-            let cfg = if let Err(e) = result {
+            if let Err(e) = result {
                 error!("Failed to parse config file: {}", e);
                 Self::save_default(path).await?;
                 Self::new()
-            } else if let Ok(cfg) = result {
-                cfg
             } else {
-                unreachable!()
-            };
-            cfg
+                result?
+            }
         } else {
             warn!("Config file not found, using default config");
             Self::save_default(path).await?;
