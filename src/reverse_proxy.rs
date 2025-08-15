@@ -124,6 +124,23 @@ pub async fn handle_request_with_scheme(client_ip: IpAddr, req: Request<Body>, i
 
     let route = route.unwrap();
 
+    // If this is an HTTPS request but the route is configured for HTTP (no SSL), redirect to HTTP.
+    if is_tls && !route.get_protocol().eq_ignore_ascii_case("https") {
+        let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+        let http_port = config.get_port();
+        let location = if http_port == 80 {
+            format!("http://{}{}", domain, path_and_query)
+        } else {
+            format!("http://{}:{}{}", domain, http_port, path_and_query)
+        };
+        return Ok(
+            Response::builder()
+                .status(StatusCode::MOVED_PERMANENTLY)
+                .header(header::LOCATION, location)
+                .body(Body::empty())?
+        );
+    }
+
     // If this is an HTTP request and the route requires HTTPS, redirect only if TLS can be served for this host.
     if !is_tls && route.get_redirect_to_https() {
         if config.can_serve_tls_for_host(&domain) {
