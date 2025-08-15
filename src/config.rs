@@ -1,5 +1,6 @@
 use anyhow::Result;
 use log::{debug, error, trace, warn};
+use notify::EventKind;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
@@ -147,10 +148,21 @@ impl Config {
             let (tx, rx) = std::sync::mpsc::channel();
             let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default()).unwrap();
             watcher.watch(&path, RecursiveMode::NonRecursive).unwrap();
-            for _res in rx {
-                debug!("Config file changed, reloading");
-                if let Err(e) = Self::try_load(&path).await {
-                    warn!("Failed to reload config: {}", e);
+            for res in rx {
+                if let Ok(event) = res {
+                    if event.kind.is_modify() || event.kind.is_create() || event.kind.is_remove() {
+                        trace!("Config file changed: {:?}", event);
+                        debug!("Config file changed, reloading");
+                        if let Err(e) = Self::try_load(&path).await {
+                            warn!("Failed to reload config: {}", e);
+                        }
+                    } else {
+                        trace!("Config file event: {:?}", event);
+                        continue; // ignore other events
+                    }
+                } else {
+                    warn!("Failed to receive config file event: {:?}", res);
+                    continue;
                 }
             }
         });
@@ -168,38 +180,62 @@ impl ProxyRoute {
     }
 }
 
-fn default_ssl_enabled() -> bool { true }
+fn default_ssl_enabled() -> bool {
+    true
+}
 
 impl Config {
-    pub fn is_ssl_enabled(&self) -> bool { self.ssl_enabled }
+    pub fn is_ssl_enabled(&self) -> bool {
+        self.ssl_enabled
+    }
 
     pub fn is_email_valid(&self) -> bool {
         let email = self.get_email();
         // very simple validation: one '@', no spaces, local and domain parts non-empty, domain contains '.'
-        if email.is_empty() || email.contains(' ') { return false; }
+        if email.is_empty() || email.contains(' ') {
+            return false;
+        }
         let parts: Vec<&str> = email.split('@').collect();
-        if parts.len() != 2 { return false; }
+        if parts.len() != 2 {
+            return false;
+        }
         let (local, domain) = (parts[0], parts[1]);
-        if local.is_empty() || domain.is_empty() { return false; }
-        if !domain.contains('.') { return false; }
+        if local.is_empty() || domain.is_empty() {
+            return false;
+        }
+        if !domain.contains('.') {
+            return false;
+        }
         // ensure domain is valid-ish
         Self::validate_domain(domain)
     }
 
     pub fn validate_domain(domain: &str) -> bool {
         // Disallow wildcard entries here; we cannot obtain wildcard certs with TLS-ALPN/HTTP-01
-        if domain.starts_with("*.") { return false; }
-        if domain.len() > 253 || !domain.contains('.') { return false; }
+        if domain.starts_with("*.") {
+            return false;
+        }
+        if domain.len() > 253 || !domain.contains('.') {
+            return false;
+        }
         // Only allow a-z, A-Z, 0-9, '-', '.'; labels 1..=63, cannot start/end with '-'
         let mut last_dot = true;
         for ch in domain.chars() {
             last_dot = ch == '.';
-            if !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '.') { return false; }
+            if !(ch.is_ascii_alphanumeric() || ch == '-' || ch == '.') {
+                return false;
+            }
         }
-        if last_dot { return false; } // cannot end with a dot
+        if last_dot {
+            return false;
+        } // cannot end with a dot
         for label in domain.split('.') {
-            if label.is_empty() || label.len() > 63 { return false; }
-            if label.starts_with('-') || label.ends_with('-') { return false; }
+            if label.is_empty() || label.len() > 63 {
+                return false;
+            }
+            if label.starts_with('-') || label.ends_with('-') {
+                return false;
+            }
         }
         true
     }
@@ -229,7 +265,9 @@ impl Config {
 
     /// True if this config can serve TLS for the specific host.
     pub fn can_serve_tls_for_host(&self, host: &str) -> bool {
-        if !self.is_ssl_enabled() || !self.is_email_valid() { return false; }
+        if !self.is_ssl_enabled() || !self.is_email_valid() {
+            return false;
+        }
         // Route must exist and be configured for HTTPS at the frontend
         if let Some(route) = self.lookup_host(host) {
             if !route.get_protocol().eq_ignore_ascii_case("https") {
