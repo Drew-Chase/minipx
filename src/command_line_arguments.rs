@@ -4,8 +4,8 @@ use clap::{ArgAction, Args, Parser, Subcommand};
 #[derive(Parser, Debug, Clone)]
 #[command(name = "minipx", about, author, version, long_about = None, propagate_version = true)]
 pub struct MinipxArguments {
-    #[arg(short = 'c', long = "config", help = "Path to the configuration file", default_value = "./minipx.json")]
-    pub(crate) config_path: String,
+    #[arg(short = 'c', long = "config", help = "Path to the configuration file (overrides running instance)")]
+    pub(crate) config_path: Option<String>,
     #[arg(short = 'v', long = "verbose", help = "Enable verbose logging")]
     pub(crate) verbose: bool,
     #[arg(short = 'w', long = "watch", help = "Watch the configuration file for changes")]
@@ -57,6 +57,8 @@ pub enum ConfigCommands {
     Show,
     #[clap(name = "email", about = "Set the email address to use for SSL certificates")]
     Email { email: String },
+    #[clap(name="show-path", about = "Show the path to the configuration file")]
+    ShowPath
 }
 
 // Optional fields for partial updates. Only provided flags will be applied.

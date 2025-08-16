@@ -27,7 +27,7 @@ fn broadcaster() -> &'static broadcast::Sender<Config> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     #[serde(skip)]
-    path: PathBuf,
+    pub(crate) path: PathBuf,
     // Email address used for ssl certificate
     email: String,
     // Directory to store cached files
