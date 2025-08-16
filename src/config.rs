@@ -2,7 +2,7 @@ use crate::ipc;
 use anyhow::Result;
 use clap::Args;
 use log::{debug, error, info, trace, warn};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
@@ -30,23 +30,35 @@ pub struct Config {
     #[serde(skip)]
     pub(crate) path: PathBuf,
     // Email address used for ssl certificate
+    #[serde(deserialize_with = "string_or_default", default = "String::new")]
     email: String,
     // Directory to store cached files
+    #[serde(deserialize_with = "string_or_default", default = "default_cache_dir")]
     cache_dir: String,
     // Host to route to
+    #[serde(default)]
     routes: HashMap<String, ProxyRoute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Args)]
 pub struct ProxyRoute {
+    #[serde(deserialize_with = "string_or_default", default = "default_host")]
     #[arg(short = 'j', long = "host", default_value = "localhost", help = "The redirect host")]
     host: String,
+
+    #[serde(deserialize_with = "string_or_default", default = "default_path")]
     #[arg(short = 'p', long = "path", default_value = "", help = "Path to route to (e.g. /api/v1)")]
     path: String,
+
+    #[serde(deserialize_with = "u16_or_default", default = "default_port")]
     #[arg(short = 'P', long = "port", help = "Port to route to, cannot be 80 or 443, and must be between 1 and 65535")]
     port: u16,
+
+    #[serde(deserialize_with = "bool_or_default", default)]
     #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
     ssl_enable: bool,
+
+    #[serde(deserialize_with = "bool_or_default", default)]
     #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
     redirect_to_https: bool,
 }
@@ -148,9 +160,9 @@ impl Config {
         if route.port == 0 {
             return Err(anyhow::anyhow!("Port must be specified"));
         }
-        if route.path.starts_with('/') {
-            warn!("Path should not start with '/', will be stripped: {}", route.path);
-            route.path = route.path.trim_start_matches('/').to_string();
+        if route.path.ends_with('/') {
+            route.path = route.path.trim_end_matches('/').to_string();
+            warn!("Path should not end with '/', will be stripped: {}", route.path);
         }
         self.routes.insert(domain, route);
         Ok(())
@@ -173,7 +185,13 @@ impl Config {
             route.host = host;
         }
         if let Some(path) = patch.path {
-            route.path = path;
+            route.path = if path.ends_with('/') {
+                let path = path.trim_end_matches('/').to_string();
+                warn!("Path should not end with '/', will be stripped: {}", path);
+                path
+            } else {
+                path
+            };
         }
         if let Some(port) = patch.port {
             if port == 0 {
@@ -367,4 +385,60 @@ impl Display for Config {
         let json = serde_json::to_string_pretty(self).unwrap();
         writeln!(f, "{}", json)
     }
+}
+
+fn string_or_default<'de, D>(deserializer: D) -> std::result::Result<String, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match String::deserialize(deserializer) {
+        Ok(s) => Ok(s),
+        Err(e) => {
+            warn!("Failed to deserialize string value: {}, using default", e);
+            Ok(String::default())
+        }
+    }
+}
+
+fn default_cache_dir() -> String {
+    "./cache".to_string()
+}
+
+// Forgiving bool: non-bool types fall back to false.
+fn bool_or_default<'de, D>(deserializer: D) -> std::result::Result<bool, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match bool::deserialize(deserializer) {
+        Ok(b) => Ok(b),
+        Err(e) => {
+            warn!("Failed to deserialize bool value: {}, using false", e);
+            Ok(false)
+        }
+    }
+}
+
+// Forgiving u16: non-integer or out-of-range types fall back to default (typically 0 here).
+fn u16_or_default<'de, D>(deserializer: D) -> std::result::Result<u16, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match u16::deserialize(deserializer) {
+        Ok(n) => Ok(n),
+        Err(e) => {
+            warn!("Failed to deserialize u16 value: {}, using default", e);
+            Ok(u16::default())
+        }
+    }
+}
+
+// Defaults for ProxyRoute fields
+fn default_host() -> String {
+    "localhost".to_string()
+}
+fn default_path() -> String {
+    "".to_string()
+}
+fn default_port() -> u16 {
+    0
 }
