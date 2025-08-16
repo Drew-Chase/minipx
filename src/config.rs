@@ -26,13 +26,8 @@ fn broadcaster() -> &'static broadcast::Sender<Config> {
 pub struct Config {
     // Email address used for ssl certificate
     email: String,
-    // Port to listen on
-    port: u16,
     // Directory to store cached files
     cache_dir: String,
-    // Enable or disable the SSL/HTTPS server globally
-    #[serde(default = "default_ssl_enabled")]
-    ssl_enabled: bool,
     // Host to route to
     routes: HashMap<String, ProxyRoute>,
 }
@@ -42,7 +37,7 @@ pub struct ProxyRoute {
     host: String,
     path: String,
     port: u16,
-    protocol: String,
+    ssl_enable: bool,
     redirect_to_https: bool,
 }
 
@@ -56,16 +51,14 @@ impl Config {
     pub fn new() -> Self {
         Self {
             email: "email@example.com".to_string(),
-            port: 80,
             cache_dir: "./cache".to_string(),
-            ssl_enabled: true,
             routes: HashMap::from([(
                 "example.com".to_string(),
                 ProxyRoute {
                     host: "localhost".to_string(),
                     path: String::new(),
                     port: 8080,
-                    protocol: "http".to_string(),
+                    ssl_enable: false,
                     redirect_to_https: false,
                 },
             )]),
@@ -77,9 +70,6 @@ impl Config {
     }
     pub fn get_cache_dir(&self) -> &String {
         &self.cache_dir
-    }
-    pub fn get_port(&self) -> u16 {
-        self.port
     }
     pub fn lookup_host(&self, key: impl AsRef<str>) -> Option<&ProxyRoute> {
         let host = key.as_ref();
@@ -165,24 +155,25 @@ impl Config {
     }
 }
 impl ProxyRoute {
-    pub fn get_protocol(&self) -> &String {
-        &self.protocol
+    pub fn is_ssl_enabled(&self) -> bool {
+        self.ssl_enable
     }
     pub fn get_redirect_to_https(&self) -> bool {
         self.redirect_to_https
     }
     pub fn get_full_url(&self) -> String {
-        format!("{}://{}:{}{}", self.protocol, self.host, self.port, self.path)
+        format!("http://{}:{}{}", self.host, self.port, self.path)
     }
-}
-
-fn default_ssl_enabled() -> bool {
-    true
 }
 
 impl Config {
     pub fn is_ssl_enabled(&self) -> bool {
-        self.ssl_enabled
+        for (_, route) in &self.routes {
+            if route.is_ssl_enabled() {
+                return true;
+            }
+        }
+        true
     }
 
     pub fn is_email_valid(&self) -> bool {
@@ -247,7 +238,7 @@ impl Config {
                 continue;
             }
             // Only consider routes that intend to serve HTTPS at the frontend
-            if !route.protocol.eq_ignore_ascii_case("https") {
+            if !route.is_ssl_enabled() {
                 continue; // neither valid nor invalid; just not used for ACME
             }
             if Self::validate_domain(domain) {
@@ -266,7 +257,7 @@ impl Config {
         }
         // Route must exist and be configured for HTTPS at the frontend
         if let Some(route) = self.lookup_host(host) {
-            if !route.get_protocol().eq_ignore_ascii_case("https") {
+            if !route.is_ssl_enabled() {
                 return false;
             }
         } else {

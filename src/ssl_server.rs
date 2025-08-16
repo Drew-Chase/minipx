@@ -83,7 +83,7 @@ pub async fn start_ssl_server() -> Result<()> {
             warn!("Failed to create cache_dir {}: {}", cache_dir, e);
         }
 
-        // Bind to 0.0.0.0:443
+        // Bind to [::]:443 (all interfaces)
         let addr = (std::net::Ipv6Addr::UNSPECIFIED, 443);
         let tcp_listener = match TcpListener::bind(addr).await {
             Ok(l) => l,
