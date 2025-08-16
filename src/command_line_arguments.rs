@@ -111,6 +111,7 @@ impl From<UpdateRouteOptions> for RoutePatch {
             } else {
                 None
             },
+            listen_port: None,
         }
     }
 }

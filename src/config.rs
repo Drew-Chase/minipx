@@ -58,6 +58,14 @@ pub struct ProxyRoute {
     #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
     ssl_enable: bool,
 
+    #[arg(
+        short = 'l',
+        long = "listen-port",
+        help = "Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS"
+    )]
+    #[serde(deserialize_with = "u16_option_or_default", default, skip_serializing_if = "Option::is_none")]
+    listen_port: Option<u16>,
+
     #[serde(deserialize_with = "bool_or_default", default)]
     #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
     redirect_to_https: bool,
@@ -205,6 +213,14 @@ impl Config {
         if let Some(redir) = patch.redirect_to_https {
             route.redirect_to_https = redir;
         }
+        if let Some(lp) = patch.listen_port {
+            // Treat 0 as "unset"
+            if lp == 0 {
+                route.listen_port = None;
+            } else {
+                route.listen_port = Some(lp);
+            }
+        }
         Ok(())
     }
 
@@ -263,6 +279,7 @@ pub struct RoutePatch {
     pub port: Option<u16>,
     pub ssl_enable: Option<bool>,
     pub redirect_to_https: Option<bool>,
+    pub listen_port: Option<u16>,
 }
 
 impl ProxyRoute {
@@ -272,6 +289,11 @@ impl ProxyRoute {
     pub fn get_redirect_to_https(&self) -> bool {
         self.redirect_to_https
     }
+
+    pub fn get_listen_port(&self) -> Option<u16> {
+        self.listen_port
+    }
+
     pub fn get_full_url(&self) -> String {
         format!("http://{}:{}{}", self.host, self.port, self.path)
     }
@@ -428,6 +450,23 @@ where
         Err(e) => {
             warn!("Failed to deserialize u16 value: {}, using default", e);
             Ok(u16::default())
+        }
+    }
+}
+
+fn u16_option_or_default<'de, D>(deserializer: D) -> std::result::Result<Option<u16>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    match Option::<u16>::deserialize(deserializer) {
+        Ok(Some(n)) if n > u16::MIN && n < u16::MAX => Ok(Some(n)),
+        Ok(_) => {
+            warn!("Invalid u16 value, using default None");
+            Ok(None)
+        }
+        Err(e) => {
+            warn!("Failed to deserialize u16 option value: {}, using default None", e);
+            Ok(None)
         }
     }
 }

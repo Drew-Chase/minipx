@@ -8,6 +8,70 @@ use std::net::IpAddr;
 use std::{convert::Infallible, net::SocketAddr};
 
 pub async fn start_rp_server() -> Result<()> {
+    // Spawn additional HTTP listeners for any routes that specify a custom listen_port (excluding 80/443)
+    {
+        let config = Config::get().await;
+        use std::collections::BTreeSet;
+        let mut ports: BTreeSet<u16> = BTreeSet::new();
+        for route in config.get_routes().values() {
+            if let Some(lp) = route.get_listen_port()
+                && lp != 0
+                && lp != 80
+                && lp != 443
+            {
+                ports.insert(lp);
+            }
+        }
+        for port in ports {
+            tokio::spawn(async move {
+                let addr = SocketAddr::from(([0, 0, 0, 0], port));
+                loop {
+                    let make_svc = make_service_fn(move |conn: &AddrStream| {
+                        let remote_addr = conn.remote_addr().ip();
+                        async move {
+                            Ok::<_, Infallible>(service_fn(move |req: Request<Body>| {
+                                let client_ip = remote_addr;
+                                async move {
+                                    match handle_request_with_scheme(client_ip, req, false).await {
+                                        Ok(resp) => Ok::<_, Infallible>(resp),
+                                        Err(e) => {
+                                            error!("handle_request error from {}: {}", client_ip, e);
+                                            Ok::<_, Infallible>(
+                                                Response::builder()
+                                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                                                    .body(Body::empty())
+                                                    .unwrap(),
+                                            )
+                                        }
+                                    }
+                                }
+                            }))
+                        }
+                    });
+
+                    let builder = match hyper::Server::try_bind(&addr) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            error!("Failed to bind reverse proxy on {}: {}", addr, e);
+                            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                            continue;
+                        }
+                    };
+
+                    let server = builder.serve(make_svc);
+
+                    info!("Reverse Proxy Server running on {}", addr);
+
+                    if let Err(e) = server.await {
+                        error!("Server error: {}", e);
+                        // retry bind/start
+                    }
+                }
+            });
+        }
+    }
+
+    // Default HTTP listener on port 80 (existing behavior)
     loop {
         let addr = SocketAddr::from(([0, 0, 0, 0], 80));
 

@@ -66,6 +66,7 @@ Watch a step-by-step tutorial on how to use minipx:
 
 - HTTP server listens on the configured port (default 80) on 0.0.0.0.
 - HTTPS server listens on port 443 on [::] (all IPv6/IPv4 via dual-stack), automatically handling ACME TLS-ALPN-01 challenges and serving TLS.
+- Additional HTTP listeners are spawned on startup for any routes with a listen_port configured (excluding 80 and 443).
 - When a route has redirect_to_https = true, HTTP requests are redirected to HTTPS only if a certificate can be served for that host; otherwise, the request is served over HTTP, and a warning is logged.
 - Config path resolution priority: explicit CLI --config/-c > config path from a running minipx instance via local IPC > ./minipx.json (default).
 - On startup, minipx starts a lightweight local IPC server that advertises its effective config path for tooling and subsequent CLI interactions.
@@ -85,7 +86,7 @@ Watch a step-by-step tutorial on how to use minipx:
 - routes
     - add: Add a new proxy route
         - required: domain
-        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect
+        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect, --listen-port
     - remove: Remove a proxy route
         - required: host
     - list: List all proxy routes
@@ -171,17 +172,49 @@ Minipx uses a JSON configuration file to define proxy behavior, SSL settings, an
 
 Each entry under `routes` maps a domain (e.g., "api.example.com") to proxy settings.
 
-| Field               | Type    | Description                                    | Default     |
-|---------------------|---------|------------------------------------------------|-------------|
-| `host`              | string  | Target hostname to proxy requests to           | `localhost` |
-| `path`              | string  | Base path for proxied requests (no trailing /) | `""`        |
-| `port`              | number  | Target port for the backend service            | `8080`      |
-| `protocol`          | string  | Backend protocol (`http` or `https`)           | `http`      |
-| `redirect_to_https` | boolean | Force HTTPS redirect for HTTP requests         | `false`     |
+| Field                      | Type    | Description                                    | Default     |
+|----------------------------|---------|------------------------------------------------|-------------|
+| `host`                     | string  | Target hostname to proxy requests to           | `localhost` |
+| `path`                     | string  | Base path for proxied requests (no trailing /) | `""`        |
+| `port`                     | number  | Target port for the backend service            | `8080`      |
+| `protocol`                 | string  | Backend protocol (`http` or `https`)           | `http`      |
+| `redirect_to_https`        | boolean | Force HTTPS redirect for HTTP requests         | `false`     |
+| `listen_port` _(optional)_ | number  | Additional port to bind for this route         | `unset`     |
 
 Notes:
 
 - Wildcard route keys (like "*.example.com") are supported for routing lookups, but wildcard certificates are NOT requested. Only exact domains are used for ACME.
+
+### Custom Listener Ports (per-route)
+
+You can bind Minipx to additional inbound ports on a per-route basis using the `listen_port` field. On startup, Minipx spawns an extra HTTP listener for each unique `listen_port` specified (excluding 80 and 443). Requests received on those ports are routed by Host header just like on port 80.
+
+Examples (route entries):
+
+```json
+// This should redirect traffic from api.example.com:[80/443]/api/v1 -> 127.0.0.1:1234
+"api.example.com": {
+    "host": "127.0.0.1",
+    "path": "/api/v1",
+    "port": 1234,
+    "ssl_enable": false,
+    "redirect_to_https": false
+},
+// This should redirect traffic from mc.example.com:25565 -> 127.0.0.1:7894
+"mc.example.com": {
+    "host": "127.0.0.1",
+    "path": "",
+    "port": 7894,
+    "listen_port": 25565,
+    "ssl_enable": false,
+    "redirect_to_https": false
+}
+```
+
+Notes:
+
+- Ports 80 (HTTP) and 443 (HTTPS) are reserved for the default listeners and should not be set as `listen_port`.
+- Changing `listen_port` currently requires a restart to bind/unbind that port; other routing changes apply live.
 
 ### Example Configuration
 
