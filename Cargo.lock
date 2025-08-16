@@ -1086,7 +1086,7 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 
 [[package]]
 name = "minipx"
-version = "0.0.2-alpha"
+version = "0.0.3-alpha"
 dependencies = [
  "anyhow",
  "clap",

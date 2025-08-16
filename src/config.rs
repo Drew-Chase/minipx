@@ -1,8 +1,10 @@
 use anyhow::Result;
-use log::{debug, error, trace, warn};
+use clap::Args;
+use log::{debug, error, info, trace, warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::Path;
+use std::fmt::Display;
+use std::path::{Path, PathBuf};
 use std::sync::OnceLock;
 use tokio::sync::RwLock;
 use tokio::sync::broadcast;
@@ -12,7 +14,7 @@ static LOADED_CONFIG: OnceLock<RwLock<Config>> = OnceLock::new();
 static CONFIG_TX: OnceLock<broadcast::Sender<Config>> = OnceLock::new();
 
 fn config_lock() -> &'static RwLock<Config> {
-    LOADED_CONFIG.get_or_init(|| RwLock::new(Config::new()))
+    LOADED_CONFIG.get_or_init(|| RwLock::new(Config::default()))
 }
 
 fn broadcaster() -> &'static broadcast::Sender<Config> {
@@ -24,6 +26,8 @@ fn broadcaster() -> &'static broadcast::Sender<Config> {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
+    #[serde(skip)]
+    path: PathBuf,
     // Email address used for ssl certificate
     email: String,
     // Directory to store cached files
@@ -32,37 +36,39 @@ pub struct Config {
     routes: HashMap<String, ProxyRoute>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+impl Config {
+    pub fn set_email(&mut self, email: String) {
+        self.email = email;
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Args)]
 pub struct ProxyRoute {
+    #[arg(short = 'j', long = "host", default_value = "localhost", help = "The redirect host")]
     host: String,
+    #[arg(short = 'p', long = "path", default_value = "", help = "Path to route to (e.g. /api/v1)")]
     path: String,
+    #[arg(short = 'P', long = "port", help = "Port to route to, cannot be 80 or 443, and must be between 1 and 65535")]
     port: u16,
+    #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
     ssl_enable: bool,
+    #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
     redirect_to_https: bool,
 }
 
 impl Default for Config {
     fn default() -> Self {
-        Self::new()
+        Self::new("./minipx.json")
     }
 }
 
 impl Config {
-    pub fn new() -> Self {
-        Self {
-            email: "email@example.com".to_string(),
-            cache_dir: "./cache".to_string(),
-            routes: HashMap::from([(
-                "example.com".to_string(),
-                ProxyRoute {
-                    host: "localhost".to_string(),
-                    path: String::new(),
-                    port: 8080,
-                    ssl_enable: false,
-                    redirect_to_https: false,
-                },
-            )]),
-        }
+    pub fn new(path: impl AsRef<Path>) -> Self {
+        let path = path.as_ref();
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let path = path.with_extension("json");
+
+        Self { path, email: String::new(), cache_dir: "./cache".to_string(), routes: HashMap::new() }
     }
 
     pub fn get_email(&self) -> &String {
@@ -71,6 +77,11 @@ impl Config {
     pub fn get_cache_dir(&self) -> &String {
         &self.cache_dir
     }
+
+    pub fn get_routes(&self) -> &HashMap<String, ProxyRoute> {
+        &self.routes
+    }
+
     pub fn lookup_host(&self, key: impl AsRef<str>) -> Option<&ProxyRoute> {
         let host = key.as_ref();
         if let Some(route) = self.routes.get(host) {
@@ -96,14 +107,16 @@ impl Config {
             if let Err(e) = result {
                 error!("Failed to parse config file: {}", e);
                 Self::save_default(path).await?;
-                Self::new()
+                Self::new(path)
             } else {
-                result?
+                let mut cfg = result?;
+                cfg.path = path.to_owned();
+                cfg
             }
         } else {
             warn!("Config file not found, using default config");
             Self::save_default(path).await?;
-            Self::new()
+            Self::new(path)
         };
         trace!("Loaded config: {:#?}", config);
 
@@ -117,19 +130,80 @@ impl Config {
         Ok(config)
     }
 
-    pub async fn save_default(path: impl AsRef<Path>) -> Result<()> {
-        debug!("Saving default config to: {}", path.as_ref().display());
-        let path = path.as_ref();
-        tokio::fs::create_dir_all(path.parent().unwrap()).await?;
-        let path = path.with_extension("json");
-        let content = serde_json::to_string_pretty(&Config::new())?;
-        tokio::fs::write(path, content).await?;
+    pub async fn add_route(&mut self, domain: String, route: impl Into<ProxyRoute>) -> Result<()> {
+        let mut route = route.into();
+        info!("Adding route: {} -> {}:{}{}", domain, route.host, route.port, route.path);
+        if self.routes.contains_key(&domain) {
+            return Err(anyhow::anyhow!("Route already exists: {}", domain));
+        }
+        if route.port == 0 {
+            return Err(anyhow::anyhow!("Port must be specified"));
+        }
+        if route.path.starts_with('/') {
+            warn!("Path should not start with '/', will be stripped: {}", route.path);
+            route.path = route.path.trim_start_matches('/').to_string();
+        }
+        self.routes.insert(domain, route);
         Ok(())
     }
 
-    pub fn watch_config_file(path: impl AsRef<Path>) {
+    pub async fn remove_route(&mut self, host: impl AsRef<str>) -> Result<()> {
+        info!("Removing route: {}", host.as_ref());
+        if self.routes.remove(host.as_ref()).is_none() {
+            warn!("Route not found: {}", host.as_ref());
+        }
+        Ok(())
+    }
+
+    // Apply a partial update to an existing route identified by domain (the map key).
+    pub async fn update_route(&mut self, domain: &str, patch: RoutePatch) -> Result<()> {
+        let route =
+            self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
+
+        if let Some(host) = patch.host {
+            route.host = host;
+        }
+        if let Some(path) = patch.path {
+            route.path = path;
+        }
+        if let Some(port) = patch.port {
+            if port == 0 {
+                return Err(anyhow::anyhow!("Port must be between 1 and 65535"));
+            }
+            route.port = port;
+        }
+        if let Some(ssl) = patch.ssl_enable {
+            route.ssl_enable = ssl;
+        }
+        if let Some(redir) = patch.redirect_to_https {
+            route.redirect_to_https = redir;
+        }
+        Ok(())
+    }
+
+    pub async fn save(&self) -> Result<()> {
+        debug!("Saving config to: {}", self.path.display());
+        if !self.path.exists() {
+            std::fs::create_dir_all(
+                self.path.parent().ok_or(anyhow::anyhow!("Failed to create parent directory for config file"))?,
+            )?;
+            tokio::fs::File::create(&self.path).await?;
+        }
+        let content = serde_json::to_string_pretty(self)?;
+        tokio::fs::write(&self.path, content).await?;
+        Ok(())
+    }
+
+    pub async fn save_default(path: impl AsRef<Path>) -> Result<()> {
+        debug!("Saving default config to: {}", path.as_ref().display());
+        let path = path.as_ref();
+        Self::new(path).save().await?;
+        Ok(())
+    }
+
+    pub fn watch_config_file(&self) {
         use notify::{Config as NotifyConfig, RecommendedWatcher, RecursiveMode, Watcher};
-        let path = path.as_ref().to_owned();
+        let path = self.path.clone();
         tokio::spawn(async move {
             let (tx, rx) = std::sync::mpsc::channel();
             let mut watcher = RecommendedWatcher::new(tx, NotifyConfig::default()).unwrap();
@@ -154,6 +228,16 @@ impl Config {
         });
     }
 }
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RoutePatch {
+    pub host: Option<String>,
+    pub path: Option<String>,
+    pub port: Option<u16>,
+    pub ssl_enable: Option<bool>,
+    pub redirect_to_https: Option<bool>,
+}
+
 impl ProxyRoute {
     pub fn is_ssl_enabled(&self) -> bool {
         self.ssl_enable
@@ -265,5 +349,12 @@ impl Config {
         }
         let (valid, _invalid) = self.get_valid_domains_for_acme();
         valid.iter().any(|d| d == host)
+    }
+}
+
+impl Display for Config {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let json = serde_json::to_string_pretty(self).unwrap();
+        writeln!(f, "{}", json)
     }
 }
