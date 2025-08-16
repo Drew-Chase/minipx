@@ -54,6 +54,14 @@ minipx --watch --verbose --config ./config/config.json
 
 > Note: The configuration directory will be created automatically if it doesn't exist.
 
+## Video Tutorial
+
+Watch a step-by-step tutorial on how to use minipx:
+
+<a href="https://youtu.be/2Uo7rTiK_h0" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/2Uo7rTiK_h0/maxresdefault.jpg" alt="Minipx tutorial on YouTube" width="640" />
+</a>
+
 ## How It Runs
 
 - HTTP server listens on the configured port (default 80) on 0.0.0.0.
