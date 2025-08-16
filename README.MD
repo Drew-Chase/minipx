@@ -38,7 +38,6 @@ sudo bash -c "$(curl -sSL https://raw.githubusercontent.com/Drew-Chase/minipx/ma
 sudo curl -sSL https://raw.githubusercontent.com/Drew-Chase/minipx/master/install.sh | bash -s -- --uninstall
 ```
 
-
 ### Basic Usage
 
 1) Create a configuration file (see Configuration below), then run:
@@ -53,31 +52,53 @@ minipx --config ./minipx.json
 minipx --watch --verbose --config ./config/config.json
 ```
 
-Note: The configuration directory will be created automatically if it doesn't exist.
+> Note: The configuration directory will be created automatically if it doesn't exist.
 
 ## How It Runs
 
 - HTTP server listens on the configured port (default 80) on 0.0.0.0.
 - HTTPS server listens on port 443 on [::] (all IPv6/IPv4 via dual-stack), automatically handling ACME TLS-ALPN-01 challenges and serving TLS.
-- When a route has redirect_to_https = true, HTTP requests are redirected to HTTPS only if a certificate can be served for that host; otherwise, the request is served over HTTP and a warning is logged.
+- When a route has redirect_to_https = true, HTTP requests are redirected to HTTPS only if a certificate can be served for that host; otherwise, the request is served over HTTP, and a warning is logged.
+- Config path resolution priority: explicit CLI --config/-c > config path from a running minipx instance via local IPC > ./minipx.json (default).
+- On startup, minipx starts a lightweight local IPC server that advertises its effective config path for tooling and subsequent CLI interactions.
 
 ## CLI Options
 
-| Short | Long        | Description                          | Default         |
-|-------|-------------|--------------------------------------|-----------------|
-| `-h`  | `--help`    | Show help information                | -               |
-| `-V`  | `--version` | Display version information          | -               |
-| `-c`  | `--config`  | Path to the configuration file       | `./minipx.json` |
-| `-v`  | `--verbose` | Enable verbose logging output        | `false`         |
-| `-w`  | `--watch`   | Watch configuration file for changes | `false`         |
+| Short | Long        | Description                                                 | Default         |
+|-------|-------------|-------------------------------------------------------------|-----------------|
+| `-h`  | `--help`    | Show help information                                       | -               |
+| `-V`  | `--version` | Display version information                                 | -               |
+| `-c`  | `--config`  | Path to the configuration file (overrides running instance) | `./minipx.json` |
+| `-v`  | `--verbose` | Enable verbose logging output                               | `false`         |
+| `-w`  | `--watch`   | Watch configuration file for changes (hot-reload)           | `false`         |
+
+### Subcommands
+
+- routes
+    - add: Add a new proxy route
+        - required: domain
+        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect
+    - remove: Remove a proxy route
+        - required: host
+    - list: List all proxy routes
+    - show: Show a single proxy route
+        - required: host
+    - update: Partially update a proxy route by domain key
+        - required: domain
+        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect
+- config
+    - show: Print the current configuration
+    - email: Set the email used for ACME/SSL certificates
+        - required: email
+    - show-path: Print the currently used configuration file path
 
 ### Examples
 
 ```bash
-# Basic usage with default config
+# Basic usage with default/auto-detected config (via IPC if another instance is running)
 minipx
 
-# Use custom config with verbose logging
+# Use custom config with verbose logging (overrides any running instance)
 minipx --verbose --config /etc/minipx/config.json
 
 # Enable hot-reload with configuration watching
@@ -85,7 +106,44 @@ minipx --watch --verbose --config ./config/config.json
 
 # You can also concat the short options together
 minipx -wvc /etc/minipx/config.json
+
+# List all routes
+minipx routes list
+
+# Add a new route
+minipx routes add example.com --host 127.0.0.1 --port 8080 --path api --redirect
+
+# Show a route by host lookup
+minipx routes show example.com
+
+# Update only specific fields on an existing route (by domain key)
+minipx routes update example.com --port 9090 --no-redirect
+
+# Remove a route
+minipx routes remove example.com
+
+# Show current config (pretty-printed)
+minipx config show
+
+# Set ACME email (will be saved to config)
+minipx config email admin@mydomain.com
+
+# Show the effective config path in use
+minipx config show-path
 ```
+
+## Inter-Process Communication (IPC)
+
+Minipx runs a small local IPC service to improve UX for tools and CLI:
+
+- Purpose: Advertise the effective configuration file path of the running instance.
+- Transport: Cross-platform local socket / named pipe.
+- Behavior:
+    - When you run minipx, it starts an IPC listener in the background that serves its config path to any local client.
+    - CLI runs (without -c/--config) will first attempt to retrieve the config path from a running instance; if none is found, they fall back to ./minipx.json.
+    - Supplying -c/--config always takes precedence and bypasses IPC discovery.
+- Single-instance friendly: If another instance is already listening, new instances won’t replace the IPC listener and will log that binding failed.
+- Security: The socket is local-only and not exposed over the network.
 
 ## Configuration
 
@@ -217,7 +275,7 @@ Contributions are welcome! Please feel free to submit issues, feature requests, 
 
 ## License
 
-This project is licensed under the MIT License — see the LICENSE file for details.
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
 
 ## Dependencies
 
