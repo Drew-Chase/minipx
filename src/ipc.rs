@@ -4,10 +4,8 @@ use interprocess::local_socket::{GenericNamespaced, ListenerOptions, Name, ToNsN
 use log::{debug, trace, warn};
 use std::path::PathBuf;
 
-const SOCKET_NAME: &str = "minipx_config_path_v1"; // Cross-platform local socket / named pipe name
+const SOCKET_NAME: &str = "minipx_ipc_socket";
 
-/// Try to retrieve the config path from a running minipx instance via local IPC.
-/// Returns None if no instance is listening.
 pub async fn get_running_config_path() -> Option<String> {
     // Prefer namespaced name for Windows/Linux abstract namespace; falls back as per crate.
     let name: Name = match SOCKET_NAME.to_ns_name::<GenericNamespaced>() {
@@ -32,8 +30,6 @@ pub async fn get_running_config_path() -> Option<String> {
     .flatten()
 }
 
-/// Start a background IPC listener that serves the config path to any connector.
-/// Best-effort; if binding fails (another instance active), we log and return.
 pub fn start_ipc_server(config_path: PathBuf) {
     std::thread::spawn(move || {
         let name: Name = match SOCKET_NAME.to_ns_name::<GenericNamespaced>() {
