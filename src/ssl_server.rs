@@ -4,12 +4,12 @@ use anyhow::Result;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response};
 use log::{error, info, warn};
-use rustls_acme::caches::DirCache;
 use rustls_acme::AcmeConfig;
+use rustls_acme::caches::DirCache;
 use tokio::net::TcpListener;
 use tokio::sync::oneshot;
-use tokio_stream::wrappers::TcpListenerStream;
 use tokio_stream::StreamExt;
+use tokio_stream::wrappers::TcpListenerStream;
 
 pub async fn start_ssl_server() -> Result<()> {
     loop {
@@ -20,6 +20,8 @@ pub async fn start_ssl_server() -> Result<()> {
             warn!("SSL is disabled via config; HTTPS server will wait for enablement");
             let mut updates = Config::subscribe();
             loop {
+                // Wait for a message from the config channel
+                // and check if SSL is enabled
                 match updates.recv().await {
                     Ok(updated) if updated.is_ssl_enabled() => break,
                     Ok(_) => {}
@@ -27,10 +29,12 @@ pub async fn start_ssl_server() -> Result<()> {
                         warn!("Config update channel closed; stopping HTTPS server supervisor");
                         return Ok(());
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => warn!("Missed {n} config updates while waiting for SSL enable"),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Missed {n} config updates while waiting for SSL enable")
+                    }
                 }
             }
-            continue;
+            continue; // restart the main loop.
         }
 
         // Validate email (global)
@@ -45,7 +49,9 @@ pub async fn start_ssl_server() -> Result<()> {
                         warn!("Config update channel closed; stopping HTTPS server supervisor");
                         return Ok(());
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => warn!("Missed {n} config updates while waiting for valid email"),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Missed {n} config updates while waiting for valid email")
+                    }
                 }
             }
             continue;
@@ -64,14 +70,18 @@ pub async fn start_ssl_server() -> Result<()> {
                     Ok(updated) => {
                         if updated.is_ssl_enabled() && updated.is_email_valid() {
                             let (vd, _) = updated.get_valid_domains_for_acme();
-                            if !vd.is_empty() { break; }
+                            if !vd.is_empty() {
+                                break;
+                            }
                         }
                     }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         warn!("Config update channel closed; stopping HTTPS server supervisor");
                         return Ok(());
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => warn!("Missed {n} config updates while waiting for valid domains"),
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        warn!("Missed {n} config updates while waiting for valid domains")
+                    }
                 }
             }
             continue;
@@ -97,7 +107,9 @@ pub async fn start_ssl_server() -> Result<()> {
                             warn!("Config update channel closed; stopping HTTPS server supervisor");
                             return Ok(());
                         }
-                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => warn!("Missed {n} config updates while waiting to rebind HTTPS"),
+                        Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                            warn!("Missed {n} config updates while waiting to rebind HTTPS")
+                        }
                     }
                 }
                 continue;
