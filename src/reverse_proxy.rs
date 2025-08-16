@@ -59,11 +59,11 @@ fn extract_host(req: &Request<Body>) -> Option<String> {
     if let Some(authority) = req.uri().authority() {
         return Some(authority.host().to_string());
     }
-    if let Some(hv) = req.headers().get(header::HOST) {
-        if let Ok(host) = hv.to_str() {
-            let host_only = host.split(':').next().unwrap_or(host);
-            return Some(host_only.to_string());
-        }
+    if let Some(hv) = req.headers().get(header::HOST)
+        && let Ok(host) = hv.to_str()
+    {
+        let host_only = host.split(':').next().unwrap_or(host);
+        return Some(host_only.to_string());
     }
     req.uri().host().map(|h| h.to_string())
 }
@@ -85,16 +85,15 @@ pub async fn handle_request_with_scheme(client_ip: IpAddr, req: Request<Body>, i
 
     let route = route.unwrap();
 
-    // If this is an HTTPS request but the route is configured for HTTP (no SSL), redirect to HTTP on default port 80.
+    // If this is an HTTPS request, but the route is configured for HTTP (no SSL),
+    // redirect to HTTP on default port 80.
     if is_tls && !route.is_ssl_enabled() {
         let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
         let location = format!("http://{}{}", domain, path_and_query);
-        return Ok(
-            Response::builder()
-                .status(StatusCode::MOVED_PERMANENTLY)
-                .header(header::LOCATION, location)
-                .body(Body::empty())?
-        );
+        return Ok(Response::builder()
+            .status(StatusCode::MOVED_PERMANENTLY)
+            .header(header::LOCATION, location)
+            .body(Body::empty())?);
     }
 
     // If this is an HTTP request and the route requires HTTPS, redirect only if TLS can be served for this host.
@@ -102,14 +101,15 @@ pub async fn handle_request_with_scheme(client_ip: IpAddr, req: Request<Body>, i
         if config.can_serve_tls_for_host(&domain) {
             let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
             let location = format!("https://{}{}", domain, path_and_query);
-            return Ok(
-                Response::builder()
-                    .status(StatusCode::MOVED_PERMANENTLY)
-                    .header(header::LOCATION, location)
-                    .body(Body::empty())?
-            );
+            return Ok(Response::builder()
+                .status(StatusCode::MOVED_PERMANENTLY)
+                .header(header::LOCATION, location)
+                .body(Body::empty())?);
         } else {
-            warn!("HTTPS redirect requested for host '{}' but TLS is unavailable (ssl disabled, invalid email, or invalid domain). Serving over HTTP.", domain);
+            warn!(
+                "HTTPS redirect requested for host '{}' but TLS is unavailable (ssl disabled, invalid email, or invalid domain). Serving over HTTP.",
+                domain
+            );
         }
     }
 
