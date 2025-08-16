@@ -1,5 +1,7 @@
-use crate::config::{ProxyRoute, RoutePatch};
+use crate::config::{Config, ProxyRoute, RoutePatch};
+use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand};
+use log::{error, info};
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "minipx", about, author, version, long_about = None, propagate_version = true)]
@@ -57,8 +59,8 @@ pub enum ConfigCommands {
     Show,
     #[clap(name = "email", about = "Set the email address to use for SSL certificates")]
     Email { email: String },
-    #[clap(name="show-path", about = "Show the path to the configuration file")]
-    ShowPath
+    #[clap(name = "show-path", about = "Show the path to the configuration file")]
+    ShowPath,
 }
 
 // Optional fields for partial updates. Only provided flags will be applied.
@@ -110,5 +112,64 @@ impl From<UpdateRouteOptions> for RoutePatch {
                 None
             },
         }
+    }
+}
+
+impl MinipxArguments {
+    pub async fn handle_arguments(&self) -> Result<()> {
+        if let Some(command) = &self.command {
+            let effective_config_path = Config::resolve_config_path(self.config_path.clone()).await;
+            let mut config = Config::try_load(&effective_config_path).await?;
+            match command {
+                // ---
+                // Routes subcommand
+                // ---
+                MinipxCommands::Routes { command } => match command {
+                    RouteCommands::AddRoute { domain, routes } => {
+                        config.add_route(domain.clone(), routes.clone()).await?;
+                        config.save().await?;
+                    }
+                    RouteCommands::RemoveRoute { host } => {
+                        config.remove_route(host).await?;
+                        config.save().await?;
+                    }
+                    RouteCommands::UpdateRoute { domain, patch } => {
+                        let patch = (*patch).clone().into();
+                        config.update_route(domain, patch).await?;
+                        config.save().await?;
+                        info!("Updated route: {}", domain);
+                    }
+                    RouteCommands::ListRoutes => {
+                        println!("{}", serde_json::to_string_pretty(config.get_routes())?);
+                    }
+                    RouteCommands::ShowRoute { host } => {
+                        if let Some(route) = config.lookup_host(host) {
+                            println!("{}", serde_json::to_string_pretty(route)?);
+                        } else {
+                            error!("Route not found: {}", host);
+                        }
+                    }
+                },
+
+                // ---
+                // Config subcommand
+                // ---
+                MinipxCommands::Config { command } => match command {
+                    ConfigCommands::Show => {
+                        println!("{}", config);
+                    }
+                    ConfigCommands::Email { email } => {
+                        config.set_email(email.clone());
+                        config.save().await?;
+                    }
+                    ConfigCommands::ShowPath => {
+                        println!("{}", config.path.to_string_lossy())
+                    }
+                },
+            }
+            // Exit after the command has been executed
+            std::process::exit(0);
+        }
+        Ok(())
     }
 }

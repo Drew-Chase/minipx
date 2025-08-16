@@ -1,3 +1,4 @@
+use crate::ipc;
 use anyhow::Result;
 use clap::Args;
 use log::{debug, error, info, trace, warn};
@@ -36,12 +37,6 @@ pub struct Config {
     routes: HashMap<String, ProxyRoute>,
 }
 
-impl Config {
-    pub fn set_email(&mut self, email: String) {
-        self.email = email;
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize, Args)]
 pub struct ProxyRoute {
     #[arg(short = 'j', long = "host", default_value = "localhost", help = "The redirect host")]
@@ -70,7 +65,9 @@ impl Config {
 
         Self { path, email: String::new(), cache_dir: "./cache".to_string(), routes: HashMap::new() }
     }
-
+    pub fn set_email(&mut self, email: String) {
+        self.email = email;
+    }
     pub fn get_email(&self) -> &String {
         &self.email
     }
@@ -96,6 +93,18 @@ impl Config {
 
     pub fn subscribe() -> broadcast::Receiver<Config> {
         broadcaster().subscribe()
+    }
+
+    pub async fn resolve_config_path(arg: Option<String>) -> String {
+        if let Some(s) = arg
+            && !s.trim().is_empty()
+        {
+            return s;
+        }
+        if let Some(path) = ipc::get_running_config_path().await {
+            return path;
+        }
+        "./minipx.json".to_string()
     }
 
     pub async fn try_load(path: impl AsRef<Path>) -> Result<Self> {
@@ -252,7 +261,8 @@ impl ProxyRoute {
 
 impl Config {
     pub fn is_ssl_enabled(&self) -> bool {
-        for (_, route) in &self.routes {
+        for kv in &self.routes {
+            let route = kv.1;
             if route.is_ssl_enabled() {
                 return true;
             }
@@ -282,7 +292,7 @@ impl Config {
     }
 
     pub fn validate_domain(domain: &str) -> bool {
-        // Disallow wildcard entries here; we cannot obtain wildcard certs with TLS-ALPN/HTTP-01
+        // Disallow wildcard entries here; we cannot get wildcard certs with TLS-ALPN/HTTP-01
         if domain.starts_with("*.") {
             return false;
         }
