@@ -116,10 +116,11 @@ impl Config {
     }
 
     pub async fn resolve_config_path(arg: Option<String>) -> String {
-        if let Some(s) = arg
-            && !s.trim().is_empty()
-        {
-            return s;
+        #[allow(clippy::collapsible_if)]
+        if let Some(s) = arg {
+            if !s.trim().is_empty() {
+                return s;
+            }
         }
         if let Some(path) = ipc::get_running_config_path().await {
             return path;
@@ -297,6 +298,11 @@ impl ProxyRoute {
     pub fn get_full_url(&self) -> String {
         format!("http://{}:{}{}", self.host, self.port, self.path)
     }
+
+    // New getters for host, port, path to avoid accessing private fields from other modules
+    pub fn get_host(&self) -> &str { &self.host }
+    pub fn get_port(&self) -> u16 { self.port }
+    pub fn get_path(&self) -> &str { &self.path }
 }
 
 impl Config {
