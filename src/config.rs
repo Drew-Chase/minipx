@@ -58,11 +58,7 @@ pub struct ProxyRoute {
     #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
     ssl_enable: bool,
 
-    #[arg(
-        short = 'l',
-        long = "listen-port",
-        help = "Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS"
-    )]
+    #[arg(short = 'l', long = "listen-port", help = "Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS")]
     #[serde(deserialize_with = "u16_option_or_default", default, skip_serializing_if = "Option::is_none")]
     listen_port: Option<u16>,
 
@@ -187,8 +183,7 @@ impl Config {
 
     // Apply a partial update to an existing route identified by domain (the map key).
     pub async fn update_route(&mut self, domain: &str, patch: RoutePatch) -> Result<()> {
-        let route =
-            self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
+        let route = self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
 
         if let Some(host) = patch.host {
             route.host = host;
@@ -228,9 +223,7 @@ impl Config {
     pub async fn save(&self) -> Result<()> {
         debug!("Saving config to: {}", self.path.display());
         if !self.path.exists() {
-            std::fs::create_dir_all(
-                self.path.parent().ok_or(anyhow::anyhow!("Failed to create parent directory for config file"))?,
-            )?;
+            std::fs::create_dir_all(self.path.parent().ok_or(anyhow::anyhow!("Failed to create parent directory for config file"))?)?;
             tokio::fs::File::create(&self.path).await?;
         }
         let content = serde_json::to_string_pretty(self)?;
@@ -296,9 +289,15 @@ impl ProxyRoute {
     }
 
     // New getters for the host, port, and path to avoid accessing private fields from other modules
-    pub fn get_host(&self) -> &str { &self.host }
-    pub fn get_port(&self) -> u16 { self.port }
-    pub fn get_path(&self) -> &str { &self.path }
+    pub fn get_host(&self) -> &str {
+        &self.host
+    }
+    pub fn get_port(&self) -> u16 {
+        self.port
+    }
+    pub fn get_path(&self) -> &str {
+        &self.path
+    }
 }
 
 impl Config {

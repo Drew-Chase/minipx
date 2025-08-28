@@ -43,14 +43,10 @@ pub async fn start_rp_server() -> Result<()> {
                                         tokio::spawn(async move {
                                             match tokio::net::TcpStream::connect((host.as_str(), target_port)).await {
                                                 Ok(mut outbound) => {
-                                                    let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound)
-                                                        .await;
+                                                    let _ = tokio::io::copy_bidirectional(&mut inbound, &mut outbound).await;
                                                 }
                                                 Err(e) => {
-                                                    error!(
-                                                        "TCP forward connect failed from {} to {}:{}: {}",
-                                                        peer, host, target_port, e
-                                                    );
+                                                    error!("TCP forward connect failed from {} to {}:{}: {}", peer, host, target_port, e);
                                                 }
                                             }
                                         });
@@ -91,11 +87,8 @@ pub async fn start_rp_server() -> Result<()> {
                                         }
                                         // try to read a response and send back
                                         let mut resp_buf = vec![0u8; 65535];
-                                        if let Ok(Ok((rn, _up))) = tokio::time::timeout(
-                                            std::time::Duration::from_millis(200),
-                                            socket.recv_from(&mut resp_buf),
-                                        )
-                                        .await
+                                        if let Ok(Ok((rn, _up))) =
+                                            tokio::time::timeout(std::time::Duration::from_millis(200), socket.recv_from(&mut resp_buf)).await
                                         {
                                             let _ = socket.send_to(&resp_buf[..rn], src).await;
                                         }
@@ -132,12 +125,7 @@ pub async fn start_rp_server() -> Result<()> {
                             Ok(resp) => Ok::<_, Infallible>(resp),
                             Err(e) => {
                                 error!("handle_request error from {}: {}", client_ip, e);
-                                Ok::<_, Infallible>(
-                                    Response::builder()
-                                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                        .body(Body::empty())
-                                        .unwrap(),
-                                )
+                                Ok::<_, Infallible>(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
                             }
                         }
                     }
@@ -182,26 +170,14 @@ fn extract_host(req: &Request<Body>) -> Option<String> {
 }
 
 fn is_websocket(req: &Request<Body>) -> bool {
-    let has_upgrade_ws = req
-        .headers()
-        .get(header::UPGRADE)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.eq_ignore_ascii_case("websocket"))
-        .unwrap_or(false);
-    let has_connection_upgrade = req
-        .headers()
-        .get(header::CONNECTION)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.to_ascii_lowercase().contains("upgrade"))
-        .unwrap_or(false);
+    let has_upgrade_ws =
+        req.headers().get(header::UPGRADE).and_then(|v| v.to_str().ok()).map(|v| v.eq_ignore_ascii_case("websocket")).unwrap_or(false);
+    let has_connection_upgrade =
+        req.headers().get(header::CONNECTION).and_then(|v| v.to_str().ok()).map(|v| v.to_ascii_lowercase().contains("upgrade")).unwrap_or(false);
     has_upgrade_ws && has_connection_upgrade
 }
 
-pub async fn handle_request_with_scheme(
-    frontend_scheme: &str,
-    client_ip: IpAddr,
-    req: Request<Body>,
-) -> Result<Response<Body>> {
+pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr, req: Request<Body>) -> Result<Response<Body>> {
     let uri = req.uri().clone();
     let domain = extract_host(&req).ok_or(anyhow!("No host in URI or Host header"))?;
 
@@ -210,10 +186,7 @@ pub async fn handle_request_with_scheme(
 
     if route.is_none() {
         warn!("Received request from {ip} for unknown host {host}", ip = client_ip, host = domain);
-        return Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("Content-Type", "text/plain")
-            .body(Body::from("Not Found"))?);
+        return Ok(Response::builder().status(StatusCode::NOT_FOUND).header("Content-Type", "text/plain").body(Body::from("Not Found"))?);
     }
 
     let route = route.unwrap();
@@ -224,10 +197,7 @@ pub async fn handle_request_with_scheme(
         if config.can_serve_tls_for_host(&domain) {
             let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
             let location = format!("https://{}{}", domain, path_and_query);
-            return Ok(Response::builder()
-                .status(StatusCode::MOVED_PERMANENTLY)
-                .header(header::LOCATION, location)
-                .body(Body::empty())?);
+            return Ok(Response::builder().status(StatusCode::MOVED_PERMANENTLY).header(header::LOCATION, location).body(Body::empty())?);
         } else {
             warn!(
                 "HTTPS redirect requested for host '{}' but TLS is unavailable (ssl disabled, invalid email, or invalid domain). Serving over HTTP.",
@@ -263,16 +233,7 @@ pub async fn handle_request_with_scheme(
 
     if is_websocket(&req) {
         debug!("WebSocket upgrade detected: frontend={fs}, upstream={up}", fs = frontend_scheme, up = target);
-        return proxy_websocket(
-            client_ip,
-            req,
-            upstream_scheme,
-            route.get_host(),
-            route.get_port(),
-            route.get_path(),
-            &domain,
-        )
-        .await;
+        return proxy_websocket(client_ip, req, upstream_scheme, route.get_host(), route.get_port(), route.get_path(), &domain).await;
     }
 
     match hyper_reverse_proxy::call(client_ip, target.as_str(), req).await {
@@ -436,34 +397,17 @@ async fn proxy_websocket(
                         // Wait for upstream upgrade
                         match upgrade::on(upstream_res).await {
                             Ok(mut upgraded_upstream) => {
-                                if let Err(e) =
-                                    tokio::io::copy_bidirectional(&mut upgraded_client, &mut upgraded_upstream).await
-                                {
-                                    error!(
-                                        "WS tunnel IO error for {domain} ({uri}): {e}",
-                                        domain = domain_owned,
-                                        uri = uri_owned,
-                                        e = e
-                                    );
+                                if let Err(e) = tokio::io::copy_bidirectional(&mut upgraded_client, &mut upgraded_upstream).await {
+                                    error!("WS tunnel IO error for {domain} ({uri}): {e}", domain = domain_owned, uri = uri_owned, e = e);
                                 }
                             }
                             Err(e) => {
-                                error!(
-                                    "WS upstream upgrade failed for {domain} ({uri}): {e}",
-                                    domain = domain_owned,
-                                    uri = uri_owned,
-                                    e = e
-                                );
+                                error!("WS upstream upgrade failed for {domain} ({uri}): {e}", domain = domain_owned, uri = uri_owned, e = e);
                             }
                         }
                     }
                     Err(e) => {
-                        error!(
-                            "WS client upgrade failed for {domain} ({uri}): {e}",
-                            domain = domain_owned,
-                            uri = uri_owned,
-                            e = e
-                        );
+                        error!("WS client upgrade failed for {domain} ({uri}): {e}", domain = domain_owned, uri = uri_owned, e = e);
                     }
                 }
             });
@@ -489,10 +433,7 @@ async fn proxy_websocket(
                 host = upstream_host,
                 scheme = upstream_scheme
             );
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .header("Content-Type", "text/plain")
-                .body(Body::from("Bad Gateway"))?)
+            Ok(Response::builder().status(StatusCode::BAD_GATEWAY).header("Content-Type", "text/plain").body(Body::from("Bad Gateway"))?)
         }
     }
 }
