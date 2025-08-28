@@ -2,6 +2,7 @@ use crate::config::{Config, ProxyRoute, RoutePatch};
 use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use log::{error, info};
+use std::fmt::{Display, Formatter};
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "minipx", about, author, version, long_about = None, propagate_version = true)]
@@ -141,11 +142,35 @@ impl MinipxArguments {
                         info!("Updated route: {}", domain);
                     }
                     RouteCommands::ListRoutes => {
-                        println!("{}", serde_json::to_string_pretty(config.get_routes())?);
+                        for (domain, route) in config.get_routes() {
+                            println!(
+                                "\x1b[1;36m{}\x1b[0m: \x1b[1;33m{}\x1b[0m -> \x1b[1;32m{}:{}\x1b[0m/\x1b[1;35m{}\x1b[0m",
+                                domain,
+                                match (route.get_listen_port(), route.is_ssl_enabled()) {
+                                    (Some(port), _) => port.to_string(),
+                                    (_, true) => "HTTPS".to_string(),
+                                    (_, false) => "HTTP".to_string(),
+                                },
+                                route.get_host(),
+                                route.get_port(),
+                                route.get_path()
+                            );
+                        }
                     }
                     RouteCommands::ShowRoute { host } => {
                         if let Some(route) = config.lookup_host(host) {
-                            println!("{}", serde_json::to_string_pretty(route)?);
+                            println!(
+                                "\x1b[1;36m{}\x1b[0m: \x1b[1;33m{}\x1b[0m -> \x1b[1;32m{}:{}\x1b[0m/\x1b[1;35m{}\x1b[0m",
+                                host,
+                                match (route.get_listen_port(), route.is_ssl_enabled()) {
+                                    (Some(port), _) => port.to_string(),
+                                    (_, true) => "HTTPS".to_string(),
+                                    (_, false) => "HTTP".to_string(),
+                                },
+                                route.get_host(),
+                                route.get_port(),
+                                route.get_path()
+                            );
                         } else {
                             error!("Route not found: {}", host);
                         }
