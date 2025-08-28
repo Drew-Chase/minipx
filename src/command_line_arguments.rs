@@ -2,7 +2,6 @@ use crate::config::{Config, ProxyRoute, RoutePatch};
 use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use log::{error, info};
-use std::fmt::{Display, Formatter};
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "minipx", about, author, version, long_about = None, propagate_version = true)]
