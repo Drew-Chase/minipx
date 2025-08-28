@@ -20,6 +20,7 @@ pub async fn start_rp_server() -> Result<()> {
         use std::collections::BTreeMap;
         let mut listeners: BTreeMap<u16, (String, u16)> = BTreeMap::new();
         for route in config.get_routes().values() {
+            #[allow(clippy::collapsible_if)]
             if let Some(lp) = route.get_listen_port() {
                 if lp != 0 && lp != 80 && lp != 443 {
                     listeners.entry(lp).or_insert((route.get_host().to_string(), route.get_port()));
@@ -90,16 +91,13 @@ pub async fn start_rp_server() -> Result<()> {
                                         }
                                         // try to read a response and send back
                                         let mut resp_buf = vec![0u8; 65535];
-                                        match tokio::time::timeout(
+                                        if let Ok(Ok((rn, _up))) = tokio::time::timeout(
                                             std::time::Duration::from_millis(200),
                                             socket.recv_from(&mut resp_buf),
                                         )
                                         .await
                                         {
-                                            Ok(Ok((rn, _up))) => {
-                                                let _ = socket.send_to(&resp_buf[..rn], src).await;
-                                            }
-                                            _ => {}
+                                            let _ = socket.send_to(&resp_buf[..rn], src).await;
                                         }
                                     }
                                     Err(e) => {
@@ -280,12 +278,7 @@ pub async fn handle_request_with_scheme(
     match hyper_reverse_proxy::call(client_ip, target.as_str(), req).await {
         Ok(response) => Ok(response),
         Err(error) => {
-            error!(
-                "HTTP proxy error for {host} -> {target}: {err}",
-                host = domain,
-                target = target,
-                err = format!("{:?}", error)
-            );
+            error!("HTTP proxy error for {host} -> {target}: {err:?}", host = domain, target = target, err = error);
             Ok(Response::builder()
                 .status(StatusCode::INTERNAL_SERVER_ERROR)
                 .header("Content-Type", "text/plain")
@@ -305,18 +298,15 @@ async fn proxy_websocket(
 ) -> Result<Response<Body>> {
     // Build upstream URI: base path + requested path_and_query
     let suffix = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    
+
     // For WebSocket upgrades, always use http:// for upstream connections
     // TLS is terminated at the proxy, so backend connections are plain HTTP
-    let upstream_uri = format!(
-        "http://{}:{}{}{}",
-        upstream_host, upstream_port, upstream_base_path, suffix
-    );
+    let upstream_uri = format!("http://{}:{}{}{}", upstream_host, upstream_port, upstream_base_path, suffix);
 
-    // Extract request body before moving req to preserve it for both upstream and client upgrade
+    // Extract the request body before moving req to preserve it for both upstream and client upgrade
     let (req_parts, req_body) = req.into_parts();
     let req = Request::from_parts(req_parts, req_body);
-    
+
     // Prepare a WebSocket handshake request to upstream (force HTTP/1.1)
     let mut builder = Request::builder().method(req.method()).version(Version::HTTP_11).uri(&upstream_uri);
 
@@ -324,7 +314,7 @@ async fn proxy_websocket(
     {
         let headers = req.headers();
         for (name, value) in headers.iter() {
-            if name == &header::HOST {
+            if name == header::HOST {
                 continue;
             }
             // Keep Upgrade/Connection and WS headers intact
@@ -401,7 +391,7 @@ async fn proxy_websocket(
                 let mut body_preview = String::from_utf8_lossy(&body_bytes).to_string();
                 if body_preview.len() > 2048 {
                     body_preview.truncate(2048);
-                    body_preview.push_str("…");
+                    body_preview.push('…');
                 }
                 warn!(
                     "WS upstream non-101 for {domain} -> {uri}: {status}; headers=<{hdrs}> body[preview]={preview}",
@@ -411,7 +401,7 @@ async fn proxy_websocket(
                     hdrs = hdrs,
                     preview = body_preview
                 );
-                // Rebuild response to client with same status/headers/body
+                // Rebuild response to the client with same status/headers/body
                 let mut resp_builder = Response::builder().status(status);
                 for (k, v) in upstream_res.headers().iter() {
                     resp_builder = resp_builder.header(k, v.clone());
@@ -419,7 +409,7 @@ async fn proxy_websocket(
                 return Ok(resp_builder.body(Body::from(body_bytes))?);
             }
 
-            // Prepare 101 response to client, mirroring key headers from upstream
+            // Prepare 101 response to the client, mirroring key headers from upstream
             let mut resp_builder = Response::builder().status(StatusCode::SWITCHING_PROTOCOLS);
             for &h in [
                 &header::UPGRADE,

@@ -295,7 +295,7 @@ impl ProxyRoute {
         self.listen_port
     }
 
-    // New getters for host, port, path to avoid accessing private fields from other modules
+    // New getters for the host, port, and path to avoid accessing private fields from other modules
     pub fn get_host(&self) -> &str { &self.host }
     pub fn get_port(&self) -> u16 { self.port }
     pub fn get_path(&self) -> &str { &self.path }

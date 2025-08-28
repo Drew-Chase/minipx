@@ -46,7 +46,7 @@ pub enum RouteCommands {
     ShowRoute { host: String },
     #[clap(name = "update", about = "Update a proxy route (partial)")]
     UpdateRoute {
-        /// Domain of the route to update (the route key, e.g. example.com)
+        /// Domain of the route to update (the route key, e.g., example.com)
         domain: String,
         #[clap(flatten)]
         patch: UpdateRouteOptions,
@@ -69,7 +69,7 @@ pub struct UpdateRouteOptions {
     /// Backend host (e.g. 127.0.0.1)
     #[arg(id = "backend-host", short = 'j', long = "host")]
     pub host: Option<String>,
-    /// Backend path (e.g. web or api/v1) — do not start with '/'
+    /// Backend path (e.g., web or api/v1) — do not start with '/'
     #[arg(short = 'p', long = "path")]
     pub path: Option<String>,
     /// Backend port (1..=65535, not 80/443)

@@ -126,7 +126,7 @@ pub async fn start_ssl_server() -> Result<()> {
 
         info!("HTTPS Server (ACME) running on [::]:443 for domains: {:?}", valid_domains);
 
-        // Setup graceful shutdown
+        // Set up the graceful shutdown
         let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
         // Service factory for HTTPS requests
