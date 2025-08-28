@@ -131,7 +131,7 @@ pub async fn start_ssl_server() -> Result<()> {
 
         // Service factory for HTTPS requests
         let make_svc = |remote_ip: std::net::IpAddr, req: Request<Body>| async move {
-            match handle_request_with_scheme(remote_ip, req, true).await {
+            match handle_request_with_scheme("https", remote_ip, req).await {
                 Ok(resp) => Ok::<Response<Body>, std::convert::Infallible>(resp),
                 Err(e) => {
                     error!("HTTPS handle_request error from {}: {}", remote_ip, e);
@@ -156,7 +156,11 @@ pub async fn start_ssl_server() -> Result<()> {
                                 let client_ip = std::net::IpAddr::from([127,0,0,1]);
                                 tokio::spawn(async move {
                                     let service = service_fn(move |req| make_svc(client_ip, req));
-                                    if let Err(e) = hyper::server::conn::Http::new().serve_connection(tls, service).await {
+                                    let mut http = hyper::server::conn::Http::new();
+                                    http.http1_only(true);
+                                    http.http1_keep_alive(true);
+                                    let conn = http.serve_connection(tls, service).with_upgrades();
+                                    if let Err(e) = conn.await {
                                         error!("HTTPS connection error: {}", e);
                                     }
                                 });
