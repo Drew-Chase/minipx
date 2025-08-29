@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="false" name="Run (WSL)" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="buildProfileId" value="dev" />
+    <option name="buildProfileId" value="release" />
     <target name="WSL - Ubuntu-24.04" />
     <option name="command" value="run -- -wvc ./target/dev-env/config.json" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
