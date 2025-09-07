@@ -78,28 +78,41 @@ Watch a step-by-step tutorial on how to use minipx:
 | `-h`  | `--help`    | Show help information                                       | -               |
 | `-V`  | `--version` | Display version information                                 | -               |
 | `-c`  | `--config`  | Path to the configuration file (overrides running instance) | `./minipx.json` |
-| `-v`  | `--verbose` | Enable verbose logging output                               | `false`         |
+| `-v`  | `--verbose` | Enable verbose logging                                      | `false`         |
 | `-w`  | `--watch`   | Watch configuration file for changes (hot-reload)           | `false`         |
 
 ### Subcommands
 
-- routes
-    - add: Add a new proxy route
-        - required: domain
-        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect, --listen-port
-    - remove: Remove a proxy route
-        - required: host
-    - list: List all proxy routes
-    - show: Show a single proxy route
-        - required: host
-    - update: Partially update a proxy route by domain key
-        - required: domain
-        - flags: --host, --path, --port, --ssl/--no-ssl, --redirect/--no-redirect
-- config
-    - show: Print the current configuration
-    - email: Set the email used for ACME/SSL certificates
-        - required: email
-    - show-path: Print the currently used configuration file path
+- **routes** - Manage proxy routes
+    - **add** - Add a new proxy route
+        - **required:** `domain` - The domain name for the route (e.g., example.com)
+        - **flags:**
+            - `-j, --host` - The redirect host (default: localhost)
+            - `-p, --path` - Path to route to (e.g. /api/v1) (default: "")
+            - `-P, --port` - Port to route to, cannot be 80 or 443, and must be between 1 and 65535
+            - `-s, --ssl` - Enable SSL (default: false)
+            - `-l, --listen-port` - Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS
+            - `-r, --redirect` - Redirect HTTP to HTTPS (default: false)
+    - **remove** - Remove a proxy route
+        - **required:** `host` - The host/domain to remove
+    - **list** - List all proxy routes
+    - **show** - Show a single proxy route
+        - **required:** `host` - The host/domain to show
+    - **update** - Partially update a proxy route by domain key
+        - **required:** `domain` - Domain of the route to update (the route key, e.g., example.com)
+        - **flags:**
+            - `-j, --host` - Backend host (e.g. 127.0.0.1)
+            - `-p, --path` - Backend path (e.g., web or api/v1) — do not start with '/'
+            - `-P, --port` - Backend port (1..=65535, not 80/443)
+            - `-s, --ssl` - Enable SSL for this route (frontend terminates TLS)
+            - `--no-ssl` - Disable SSL for this route
+            - `-r, --redirect` - Redirect HTTP to HTTPS for this route
+            - `--no-redirect` - Disable HTTP to HTTPS redirect
+- **config** - Manage the configuration file
+    - **show** - Show the current configuration
+    - **email** - Set the email address to use for SSL certificates
+        - **required:** `email` - Email address for ACME/Let's Encrypt
+    - **show-path** - Show the path to the configuration file
 
 ### Examples
 
@@ -160,26 +173,24 @@ Minipx uses a JSON configuration file to define proxy behavior, SSL settings, an
 
 ### Global Settings
 
-| Field         | Type    | Description                                          | Default             |
-|---------------|---------|------------------------------------------------------|---------------------|
-| `email`       | string  | Email for Let's Encrypt account (required for HTTPS) | `email@example.com` |
-| `port`        | number  | Port for the HTTP reverse proxy to listen on         | `80`                |
-| `cache_dir`   | string  | Directory for ACME account/certificate cache         | `./cache`           |
-| `ssl_enabled` | boolean | Enable or disable the HTTPS server globally          | `true`              |
-| `routes`      | object  | Domain-to-route mapping configuration                | `{}`                |
+| Field       | Type   | Description                                          | Default     |
+|-------------|--------|------------------------------------------------------|-------------|
+| `email`     | string | Email for Let's Encrypt account (required for HTTPS) | `""`        |
+| `cache_dir` | string | Directory for ACME account/certificate cache         | `"./cache"` |
+| `routes`    | object | Domain-to-route mapping configuration                | `{}`        |
 
 ### Route Configuration
 
 Each entry under `routes` maps a domain (e.g., "api.example.com") to proxy settings.
 
-| Field                      | Type    | Description                                    | Default     |
-|----------------------------|---------|------------------------------------------------|-------------|
-| `host`                     | string  | Target hostname to proxy requests to           | `localhost` |
-| `path`                     | string  | Base path for proxied requests (no trailing /) | `""`        |
-| `port`                     | number  | Target port for the backend service            | `8080`      |
-| `protocol`                 | string  | Backend protocol (`http` or `https`)           | `http`      |
-| `redirect_to_https`        | boolean | Force HTTPS redirect for HTTP requests         | `false`     |
-| `listen_port` _(optional)_ | number  | Additional port to bind for this route         | `unset`     |
+| Field                      | Type    | Description                                         | Default       |
+|----------------------------|---------|-----------------------------------------------------|---------------|
+| `host`                     | string  | Target hostname to proxy requests to                | `"localhost"` |
+| `path`                     | string  | Base path for proxied requests (no trailing /)      | `""`          |
+| `port`                     | number  | Target port for the backend service                 | `0`           |
+| `ssl_enable`               | boolean | Enable SSL for this route (frontend terminates TLS) | `false`       |
+| `redirect_to_https`        | boolean | Force HTTPS redirect for HTTP requests              | `false`       |
+| `listen_port` _(optional)_ | number  | Additional port to bind for this route              | `null`        |
 
 Notes:
 
@@ -192,24 +203,31 @@ You can bind Minipx to additional inbound ports on a per-route basis using the `
 Examples (route entries):
 
 ```json
-// This should redirect traffic from api.example.com:[80/443]/api/v1 -> 127.0.0.1:1234
-"api.example.com": {
-    "host": "127.0.0.1",
-    "path": "/api/v1",
-    "port": 1234,
-    "ssl_enable": false,
-    "redirect_to_https": false
-},
-// This should redirect traffic from mc.example.com:25565 -> 127.0.0.1:7894
-"mc.example.com": {
-    "host": "127.0.0.1",
-    "path": "",
-    "port": 7894,
-    "listen_port": 25565,
-    "ssl_enable": false,
-    "redirect_to_https": false
+{
+  "routes": {
+    "api.example.com": {
+      "host": "127.0.0.1",
+      "path": "/api/v1",
+      "port": 1234,
+      "ssl_enable": false,
+      "redirect_to_https": false
+    },
+    "mc.example.com": {
+      "host": "127.0.0.1",
+      "path": "",
+      "port": 7894,
+      "listen_port": 25565,
+      "ssl_enable": false,
+      "redirect_to_https": false
+    }
+  }
 }
 ```
+
+Routes explanation:
+
+- `api.example.com` redirects traffic from api.example.com:[80/443]/api/v1 -> 127.0.0.1:1234
+- `mc.example.com` redirects traffic from mc.example.com:25565 -> 127.0.0.1:7894
 
 Notes:
 
@@ -221,27 +239,25 @@ Notes:
 ```json
 {
   "email": "admin@mydomain.com",
-  "port": 80,
   "cache_dir": "./ssl-cache",
-  "ssl_enabled": true,
   "routes": {
     "api.mydomain.com": {
       "host": "localhost",
       "path": "/api/v1",
       "port": 3000,
-      "protocol": "http",
+      "ssl_enable": false,
       "redirect_to_https": true
     },
     "app.mydomain.com": {
       "host": "192.168.1.100",
       "port": 8080,
-      "protocol": "http",
+      "ssl_enable": false,
       "redirect_to_https": true
     },
     "secure.mydomain.com": {
       "host": "backend-server",
       "port": 443,
-      "protocol": "https",
+      "ssl_enable": true,
       "redirect_to_https": false
     }
   }
@@ -265,14 +281,14 @@ Requirements:
 
 Behavior with invalid config:
 
-- If `ssl_enabled` is false: HTTPS server does not start (waits for enablement via hot-reload).
+- If no routes have `ssl_enable` set to true: HTTPS server does not start (waits for SSL-enabled routes via hot-reload).
 - If `email` is invalid: HTTPS server waits until a valid email is provided.
 - If some domains are invalid: HTTPS starts for valid domains only and logs the skipped ones.
 - HTTP→HTTPS redirects occur only when a certificate can be served for that host; otherwise traffic is served over HTTP and a warning is logged.
 
 Hot-reload behavior:
 
-- Changes to `ssl_enabled`, `email`, `cache_dir`, or the set of valid domains trigger a graceful HTTPS server restart.
+- Changes to route `ssl_enable` settings, `email`, `cache_dir`, or the set of valid domains trigger a graceful HTTPS server restart.
 
 ## Logging
 
@@ -308,7 +324,7 @@ Common issues:
 3) Backend connection refused
 
 - Verify target service is running and reachable from Minipx.
-- Check `host`, `port`, and `protocol` in your route configuration.
+- Check `host` and `port` in your route configuration.
 
 ## Contributing
 
