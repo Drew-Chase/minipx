@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::reverse_proxy::handle_request_with_scheme;
+use crate::proxy::request_handler::handle_request_with_scheme;
 use anyhow::Result;
 use hyper::service::service_fn;
 use hyper::{Body, Request, Response};

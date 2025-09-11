@@ -1,10 +1,11 @@
-mod command_line_arguments;
+mod cli;
 mod config;
+mod proxy;
+mod utils;
 mod ipc;
-mod reverse_proxy;
 mod ssl_server;
 
-use crate::command_line_arguments::MinipxArguments;
+use crate::cli::MinipxArguments;
 use crate::config::Config;
 use anyhow::Result;
 use clap::Parser;
@@ -33,7 +34,7 @@ async fn main() -> Result<()> {
     ipc::start_ipc_server(std::path::PathBuf::from(&effective_config_path));
 
     // Run HTTP and HTTPS servers concurrently
-    tokio::try_join!(reverse_proxy::start_rp_server(), ssl_server::start_ssl_server())?;
+    tokio::try_join!(proxy::start_rp_server(), ssl_server::start_ssl_server())?;
 
     Ok(())
 }
