@@ -48,6 +48,19 @@ pub struct ProxyRoute {
     #[serde(deserialize_with = "bool_or_default", default)]
     #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
     pub(crate) redirect_to_https: bool,
+
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[arg(skip)]
+    pub(crate) subroutes: Vec<ProxyPathRoute>
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyPathRoute {
+    #[serde(deserialize_with = "string_or_default", default = "default_path")]
+    pub path: String,
+
+    #[serde(deserialize_with = "u16_or_default", default = "default_port")]
+    pub port: u16
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -166,6 +179,50 @@ impl Config {
                 route.listen_port = Some(lp);
             }
         }
+        Ok(())
+    }
+
+    // Add a subroute to an existing route
+    pub async fn add_subroute(&mut self, domain: &str, path: String, port: u16) -> Result<()> {
+        use log::{info, warn};
+        
+        let route = self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
+        
+        // Validate port
+        if let Err(err) = validate_custom_port(port) {
+            return Err(anyhow::anyhow!(err));
+        }
+        
+        // Check if port conflicts with parent route
+        if port == route.port {
+            return Err(anyhow::anyhow!("Subroute port cannot be the same as the parent route port: {}", port));
+        }
+        
+        // Clean up path
+        let mut clean_path = path;
+        if clean_path.ends_with('/') {
+            clean_path = trim_trailing_slash(clean_path);
+            warn!("Path should not end with '/', will be stripped: {}", clean_path);
+        }
+        if !clean_path.starts_with('/') {
+            clean_path = format!("/{}", clean_path);
+            info!("Path should start with '/', prepended: {}", clean_path);
+        }
+        
+        // Check for duplicate subroute paths
+        for existing_subroute in &route.subroutes {
+            if existing_subroute.path == clean_path {
+                return Err(anyhow::anyhow!("Subroute already exists for path: {}", clean_path));
+            }
+        }
+        
+        let subroute = ProxyPathRoute {
+            path: clean_path.clone(),
+            port,
+        };
+        
+        route.subroutes.push(subroute);
+        info!("Added subroute to {}: {} -> port {}", domain, clean_path, port);
         Ok(())
     }
 }

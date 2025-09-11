@@ -1,6 +1,7 @@
 use crate::config::Config;
+use crate::config::types::ProxyPathRoute;
 use crate::proxy::websocket::{is_websocket, proxy_websocket};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use hyper::{Body, Request, Response, StatusCode, header};
 use log::{debug, error, info, warn};
 use std::net::IpAddr;
@@ -31,10 +32,7 @@ pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr
 
     if route.is_none() {
         warn!("Received request from {ip} for unknown host {host}", ip = client_ip, host = domain);
-        return Ok(Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .header("Content-Type", "text/plain")
-            .body(Body::from("Not Found"))?);
+        return Ok(Response::builder().status(StatusCode::NOT_FOUND).header("Content-Type", "text/plain").body(Body::from("Not Found"))?);
     }
 
     let route = route.unwrap();
@@ -45,10 +43,7 @@ pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr
         if config.can_serve_tls_for_host(&domain) {
             let path_and_query = uri.path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
             let location = format!("https://{}{}", domain, path_and_query);
-            return Ok(Response::builder()
-                .status(StatusCode::MOVED_PERMANENTLY)
-                .header(header::LOCATION, location)
-                .body(Body::empty())?);
+            return Ok(Response::builder().status(StatusCode::MOVED_PERMANENTLY).header(header::LOCATION, location).body(Body::empty())?);
         } else {
             warn!(
                 "HTTPS redirect requested for host '{}' but TLS is unavailable (ssl disabled, invalid email, or invalid domain). Serving over HTTP.",
@@ -68,13 +63,27 @@ pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr
         }
     };
 
-    let path = route.get_path();
-    let target = format!("{}://{}:{}{}", upstream_scheme, route.get_host(), route.get_port(), path);
+    // Check for matching subroute based on request path
+    let sub_route: Option<ProxyPathRoute> = route.subroutes
+        .iter()
+        .find(|r| r.path != "/" && uri.path().starts_with(r.path.as_str()))
+        .cloned();
+    let target = if let Some(sub) = sub_route {
+        format!(
+            "{protocol}://{domain}:{port}{path}",
+            protocol = upstream_scheme,
+            domain = route.get_host(),
+            port = sub.port,
+            path = uri.path().strip_prefix(sub.path.as_str()).unwrap_or("/"),
+        )
+    } else {
+        format!("{}://{}:{}{}", upstream_scheme, route.get_host(), route.get_port(), uri.path())
+    };
+
     info!(
-        "Received request from {ip} for {fs}://{host} -> {route}{req_path}",
+        "Received request from {ip} for {fs}://{host} -> {route}",
         fs = frontend_scheme,
         ip = client_ip,
-        req_path = uri,
         host = domain,
         route = target
     );

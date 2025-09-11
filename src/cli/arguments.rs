@@ -51,6 +51,15 @@ pub enum RouteCommands {
         #[clap(flatten)]
         patch: UpdateRouteOptions,
     },
+    #[clap(name = "addsub", about = "Add a subroute to an existing proxy route")]
+    AddSubroute {
+        /// Domain of the existing route to add the subroute to
+        domain: String,
+        /// Path for the subroute (e.g. /path/to/subroute)
+        path: String,
+        /// Port to route the subroute to
+        port: u16,
+    },
 }
 
 #[derive(Subcommand, Debug, Clone)]
@@ -173,6 +182,11 @@ impl MinipxArguments {
                         } else {
                             error!("Route not found: {}", host);
                         }
+                    }
+                    RouteCommands::AddSubroute { domain, path, port } => {
+                        config.add_subroute(domain, path.clone(), *port).await?;
+                        config.save().await?;
+                        info!("Added subroute to {}: {} -> port {}", domain, path, port);
                     }
                 },
 
