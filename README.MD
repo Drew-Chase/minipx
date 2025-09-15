@@ -108,6 +108,10 @@ Watch a step-by-step tutorial on how to use minipx:
             - `--no-ssl` - Disable SSL for this route
             - `-r, --redirect` - Redirect HTTP to HTTPS for this route
             - `--no-redirect` - Disable HTTP to HTTPS redirect
+    - **addsub** - Add a subroute to an existing proxy route
+        - **required:** `domain` - The domain of the existing route
+        - **required:** `path` - Base path for the subroute (e.g., /maps/smp)
+        - **required:** `port` - Backend port for this subroute (not 80/443; must differ from parent route port)
 - **config** - Manage the configuration file
     - **show** - Show the current configuration
     - **email** - Set the email address to use for SSL certificates
@@ -143,6 +147,9 @@ minipx routes update example.com --port 9090 --no-redirect
 
 # Remove a route
 minipx routes remove example.com
+
+# Add a subroute (path-based) to an existing route
+minipx routes addsub example.com /maps/smp 8100
 
 # Show current config (pretty-printed)
 minipx config show
@@ -183,18 +190,79 @@ Minipx uses a JSON configuration file to define proxy behavior, SSL settings, an
 
 Each entry under `routes` maps a domain (e.g., "api.example.com") to proxy settings.
 
-| Field                      | Type    | Description                                         | Default       |
-|----------------------------|---------|-----------------------------------------------------|---------------|
-| `host`                     | string  | Target hostname to proxy requests to                | `"localhost"` |
-| `path`                     | string  | Base path for proxied requests (no trailing /)      | `""`          |
-| `port`                     | number  | Target port for the backend service                 | `0`           |
-| `ssl_enable`               | boolean | Enable SSL for this route (frontend terminates TLS) | `false`       |
-| `redirect_to_https`        | boolean | Force HTTPS redirect for HTTP requests              | `false`       |
-| `listen_port` _(optional)_ | number  | Additional port to bind for this route              | `null`        |
+| Field                      | Type             | Description                                                                  | Default       |
+|----------------------------|------------------|------------------------------------------------------------------------------|---------------|
+| `host`                     | string           | Target hostname to proxy requests to                                         | `"localhost"` |
+| `path`                     | string           | Base path for proxied requests (no trailing /)                               | `""`          |
+| `port`                     | number           | Target port for the backend service                                          | `0`           |
+| `ssl_enable`               | boolean          | Enable SSL for this route (frontend terminates TLS)                          | `false`       |
+| `redirect_to_https`        | boolean          | Force HTTPS redirect for HTTP requests                                       | `false`       |
+| `listen_port` _(optional)_ | number           | Additional port to bind for this route                                       | `null`        |
+| `subroutes` _(optional)_   | array of objects | Path-based overrides that route specific prefixes to different backend ports | `[]`          |
+
+Subroute object:
+
+- `path` (string): Base path prefix to match (e.g., "/maps/smp").
+- `port` (number): Backend port for requests matching this path (1..=65535, not 80/443, and must be different from the parent `port`).
 
 Notes:
 
 - Wildcard route keys (like "*.example.com") are supported for routing lookups, but wildcard certificates are NOT requested. Only exact domains are used for ACME.
+
+### Subroutes (per-domain path routing)
+
+Subroutes let you map specific path prefixes under a domain to different backend ports. When a request path starts with a subroute `path`, Minipx forwards the request to that subroute's `port` and strips the matched prefix before proxying to the backend.
+
+Behavior:
+
+- Matching: Prefix matching; if multiple subroutes match a request path, the first match in config order is used. Empty paths and `/` are ignored for matching.
+- Path rewrite: The subroute `path` prefix is removed before proxying so your backend sees the path without the prefix. Query strings are preserved.
+- WebSockets: Subroutes also apply to WebSocket upgrades; the same path stripping and port selection occur for WS requests.
+- Fallback: If no subroute matches, traffic is sent to the parent route's `host`:`port` unchanged.
+
+Constraints and tips:
+
+- Ports 80 and 443 are reserved and cannot be used for subroutes.
+- A subroute's `port` must not equal the parent route's `port`.
+- Duplicate subroute `path` entries are rejected.
+- Paths should start with `/`. If they end with `/`, Minipx will normalize them by trimming the trailing slash.
+
+Example configuration with a subroute:
+
+```json
+{
+  "email": "",
+  "cache_dir": "./cache",
+  "routes": {
+    "dclabs.local": {
+      "host": "192.168.1.204",
+      "path": "",
+      "port": 8088,
+      "ssl_enable": false,
+      "redirect_to_https": false,
+      "subroutes": [
+        {
+          "path": "/maps/smp",
+          "port": 8100
+        }
+      ]
+    }
+  }
+}
+```
+
+CLI usage:
+
+```bash
+# Show help for adding a subroute
+minipx routes addsub -h
+
+# Attempt to add a subroute using the same port as the parent (will error)
+minipx -c ./config.json routes addsub dclabs.local /synclounge 8088
+
+# Add a valid subroute
+minipx -c ./config.json routes addsub dclabs.local /maps/smp 8100
+```
 
 ### Custom Listener Ports (per-route)
 
