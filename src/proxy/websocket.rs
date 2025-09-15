@@ -33,15 +33,21 @@ pub async fn proxy_websocket(
     upstream_scheme: &str,
     upstream_host: &str,
     upstream_port: u16,
-    upstream_base_path: &str,
+    subroute_path: &str,
     domain: &str,
 ) -> Result<Response<Body>> {
-    // Build upstream URI: base path + requested path_and_query
+    // Build upstream URI: strip subroute path if present, then add requested path_and_query
     let suffix = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
+    
+    let upstream_path = if !subroute_path.is_empty() && suffix.starts_with(subroute_path) {
+        suffix.strip_prefix(subroute_path).unwrap_or("/")
+    } else {
+        suffix
+    };
 
     // For WebSocket upgrades, always use http:// for upstream connections
     // TLS is terminated at the proxy, so backend connections are plain HTTP
-    let upstream_uri = format!("http://{}:{}{}{}", upstream_host, upstream_port, upstream_base_path, suffix);
+    let upstream_uri = format!("http://{}:{}{}", upstream_host, upstream_port, upstream_path);
 
     // Extract the request body before moving req to preserve it for both upstream and client upgrade
     let (req_parts, req_body) = req.into_parts();
