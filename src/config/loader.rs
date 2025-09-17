@@ -31,8 +31,15 @@ impl Config {
             if let Err(e) = result {
                 error!("Failed to parse config file: {}", e);
                 // Move the corrupted config file to a backup
-                let backup_path = path.with_extension("corrupted");
+                let mut number_of_coruptions = 1;
+                let mut backup_path = path.with_extension(format!("corrupted.{}", number_of_coruptions));
+
+                while backup_path.exists() {
+                    backup_path = path.with_extension(format!("corrupted.{}", number_of_coruptions));
+                    number_of_coruptions += 1;
+                }
                 std::fs::rename(path, backup_path)?;
+
                 warn!("Config file corrupted, using default config");
                 Self::save_default(path).await?;
                 Self::new(path)
@@ -57,6 +64,7 @@ impl Config {
 
         Ok(config)
     }
+
 
     /// Save the current configuration to its file
     pub async fn save(&self) -> Result<()> {
