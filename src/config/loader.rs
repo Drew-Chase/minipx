@@ -30,6 +30,10 @@ impl Config {
             let result = serde_json::from_str::<Config>(&content);
             if let Err(e) = result {
                 error!("Failed to parse config file: {}", e);
+                // Move the corrupted config file to a backup
+                let backup_path = path.with_extension("corrupted");
+                std::fs::rename(path, backup_path)?;
+                warn!("Config file corrupted, using default config");
                 Self::save_default(path).await?;
                 Self::new(path)
             } else {
