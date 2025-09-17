@@ -1,3 +1,6 @@
+[workspace]
+members = ["tools/build-archiver"]
+
 [package]
 name = "minipx"
 version = "1.0.1"
