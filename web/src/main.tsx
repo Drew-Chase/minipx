@@ -2,12 +2,11 @@ import React from "react";
 import {BrowserRouter, Route, Routes, useNavigate} from "react-router-dom";
 import ReactDOM from "react-dom/client";
 
-import "./assets/css/index.css";
-import Home from "./assets/pages/Home.tsx";
-import About from "./assets/pages/About.tsx";
-import Navigation from "./assets/components/Navigation.tsx";
-import {ThemeProvider} from "./assets/providers/ThemeProvider.tsx";
+import "./css/index.css";
+import Navigation from "./components/Navigation";
+import {ThemeProvider} from "./providers/ThemeProvider";
 import {HeroUIProvider} from "@heroui/react";
+import Dashboard from "./pages/Dashboard";
 
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
@@ -25,13 +24,12 @@ export function MainContentRenderer()
     const navigate = useNavigate();
     return (
         <HeroUIProvider navigate={navigate}>
-            <Navigation/>
-            <Routes>
-                <Route>
-                    <Route path="/" element={<Home/>}/>
-                    <Route path="/about" element={<About/>}/>
-                </Route>
-            </Routes>
+            <div className="min-h-screen bg-background">
+                <Navigation/>
+                <Routes>
+                    <Route path="/" element={<Dashboard/>}/>
+                </Routes>
+            </div>
         </HeroUIProvider>
     );
 }

@@ -10,7 +10,7 @@ use serde_json::json;
 /// # Returns
 ///
 /// A JSON object with a `status` field set to "ok".
-#[get("/")]
+#[get("")]
 async fn status() -> Result<impl Responder> {
 	Ok(HttpResponse::Ok().json(json!({ "status": "ok" })))
 }

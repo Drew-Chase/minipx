@@ -40,3 +40,8 @@ body{
   background-color: hsl(var(--heroui-primary));
   color: hsl(var(--heroui-background));
 }
+
+
+input:focus-visible,textarea:focus-visible {
+  outline: none !important;
+}
