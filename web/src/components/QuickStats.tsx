@@ -58,7 +58,7 @@ export default function QuickStats({ servers }: QuickStatsProps) {
           style={{ animationDelay: stat.delay }}
         >
           <CardBody className="flex flex-row items-center gap-4">
-            <div className={`p-3 rounded-full bg-${stat.color}/10`}>
+            <div className={`p-3 rounded-full bg-${stat.color}/10 h-12 w-12`}>
               <Icon icon={stat.icon} width="24" height="24" className={`text-${stat.color}`} />
             </div>
             <div>
