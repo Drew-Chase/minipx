@@ -54,7 +54,7 @@ async fn create_server(pool: web::Data<SqlitePool>, req: web::Json<CreateServerR
     let now = Utc::now().to_rfc3339();
 
     let host = req.host.clone().unwrap_or_else(|| "localhost".to_string());
-    let path = req.path.clone().unwrap_or_else(|| "".to_string());
+    let path = req.path.clone().unwrap_or_default();
     let ssl_enabled = req.ssl_enabled.unwrap_or(false);
     let redirect_to_https = req.redirect_to_https.unwrap_or(false);
 
