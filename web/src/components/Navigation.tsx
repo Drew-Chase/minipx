@@ -15,7 +15,7 @@ export default function Navigation()
             }}
             className="animate-slide-down"
         >
-            <NavbarBrand as={Link} href={"/"} className={"text-white font-bold"}>
+            <NavbarBrand as={Link} href={"/"} className={"dark:text-white text-black font-bold"}>
                 Minipx Dashboard
             </NavbarBrand>
             <NavbarContent justify="end">
