@@ -9,18 +9,12 @@
 //! cargo run --example route_management
 //! ```
 
-use minipx::config::{Config, ProxyRoute, RoutePatch};
 use anyhow::Result;
-use log::info;
+use minipx::config::{Config, ProxyRoute, RoutePatch};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-
-    info!("Route Management Example");
+    println!("Route Management Example");
 
     // Create or load configuration
     let mut config = Config::new("./route-example.json");
@@ -30,39 +24,9 @@ async fn main() -> Result<()> {
 
     // Add multiple routes
     let routes = vec![
-        (
-            "api.example.com",
-            ProxyRoute::new(
-                "localhost".to_string(),
-                "/api".to_string(),
-                3000,
-                true,
-                None,
-                true,
-            ),
-        ),
-        (
-            "web.example.com",
-            ProxyRoute::new(
-                "localhost".to_string(),
-                "".to_string(),
-                8080,
-                true,
-                None,
-                true,
-            ),
-        ),
-        (
-            "admin.example.com",
-            ProxyRoute::new(
-                "localhost".to_string(),
-                "/admin".to_string(),
-                9000,
-                true,
-                None,
-                false,
-            ),
-        ),
+        ("api.example.com", ProxyRoute::new("localhost".to_string(), "/api".to_string(), 3000, true, None, true)),
+        ("web.example.com", ProxyRoute::new("localhost".to_string(), "".to_string(), 8080, true, None, true)),
+        ("admin.example.com", ProxyRoute::new("localhost".to_string(), "/admin".to_string(), 9000, true, None, false)),
     ];
 
     for (domain, route) in routes {
@@ -80,11 +44,7 @@ async fn main() -> Result<()> {
             route.get_host(),
             route.get_port(),
             route.get_path(),
-            if route.is_ssl_enabled() {
-                " [SSL]"
-            } else {
-                ""
-            }
+            if route.is_ssl_enabled() { " [SSL]" } else { "" }
         );
     }
 
@@ -101,17 +61,7 @@ async fn main() -> Result<()> {
     }
 
     // Wildcard lookup example
-    config.add_route(
-        "*.dev.example.com".to_string(),
-        ProxyRoute::new(
-            "localhost".to_string(),
-            "".to_string(),
-            4000,
-            false,
-            None,
-            false,
-        ),
-    ).await?;
+    config.add_route("*.dev.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "".to_string(), 4000, false, None, false)).await?;
 
     if let Some(route) = config.lookup_host("subdomain.dev.example.com") {
         println!("\nWildcard match for subdomain.dev.example.com:");
@@ -123,12 +73,12 @@ async fn main() -> Result<()> {
 
     // Update a route using RoutePatch (partial update)
     let patch = RoutePatch {
-        host: None,                          // Keep existing host
-        path: Some("/api/v2".to_string()),   // Update path
-        port: Some(3001),                    // Update port
-        ssl_enable: None,                    // Keep existing SSL setting
-        redirect_to_https: Some(false),      // Disable redirect
-        listen_port: None,                   // Keep existing listen port
+        host: None,                        // Keep existing host
+        path: Some("/api/v2".to_string()), // Update path
+        port: Some(3001),                  // Update port
+        ssl_enable: None,                  // Keep existing SSL setting
+        redirect_to_https: Some(false),    // Disable redirect
+        listen_port: None,                 // Keep existing listen port
     };
 
     config.update_route("api.example.com", patch).await?;

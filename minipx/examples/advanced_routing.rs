@@ -12,18 +12,12 @@
 //! cargo run --example advanced_routing
 //! ```
 
-use minipx::config::{Config, ProxyRoute};
 use anyhow::Result;
-use log::info;
+use minipx::config::{Config, ProxyRoute};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-
-    info!("Advanced Routing Configuration Example");
+    println!("Advanced Routing Configuration Example");
 
     let mut config = Config::new("./advanced-routing.json");
     config.set_email("admin@example.com".to_string());

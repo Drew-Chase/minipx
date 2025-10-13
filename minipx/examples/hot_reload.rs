@@ -16,16 +16,10 @@
 
 use minipx::{config::Config, proxy, ssl_server};
 use anyhow::Result;
-use log::info;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging with more verbose output
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-
-    info!("Starting minipx with hot-reload enabled");
+    println!("Starting minipx with hot-reload enabled");
 
     // Create a configuration file with some initial routes
     let config_path = "./hot-reload-example.json";
@@ -34,15 +28,15 @@ async fn main() -> Result<()> {
     // Load the configuration
     let config = Config::try_load(config_path).await?;
 
-    info!("Configuration loaded from: {}", config_path);
-    info!("Initial routes: {}", config.get_routes().len());
+    println!("Configuration loaded from: {}", config_path);
+    println!("Initial routes: {}", config.get_routes().len());
 
     // Enable configuration file watching
     // This starts a background task that monitors the file for changes
     config.watch_config_file();
 
-    info!("Hot-reload enabled! The server will automatically apply configuration changes.");
-    info!("Try modifying {} to see hot-reload in action", config_path);
+    println!("Hot-reload enabled! The server will automatically apply configuration changes.");
+    println!("Try modifying {} to see hot-reload in action", config_path);
 
     println!("\n╔═══════════════════════════════════════════════════════════╗");
     println!("║           HOT RELOAD DEMONSTRATION                       ║");
@@ -88,7 +82,7 @@ async fn main() -> Result<()> {
 async fn setup_initial_config(config_path: &str) -> Result<()> {
     use minipx::config::ProxyRoute;
 
-    info!("Creating initial configuration");
+    println!("Creating initial configuration");
 
     let mut config = Config::new(config_path);
     config.set_email("admin@example.com".to_string());
@@ -119,7 +113,7 @@ async fn setup_initial_config(config_path: &str) -> Result<()> {
     ).await?;
 
     config.save().await?;
-    info!("Initial configuration saved");
+    println!("Initial configuration saved");
 
     Ok(())
 }

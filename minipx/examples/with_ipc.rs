@@ -13,31 +13,25 @@
 //! # The CLI will automatically discover the running instance via IPC
 //! ```
 
-use minipx::{config::Config, ipc, proxy, ssl_server};
 use anyhow::Result;
-use log::info;
+use minipx::{config::Config, ipc, proxy, ssl_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    env_logger::Builder::from_default_env()
-        .filter_level(log::LevelFilter::Info)
-        .init();
-
-    info!("Starting minipx with IPC support");
+    println!("Starting minipx with IPC support");
 
     // Load or create configuration
     let config_path = "./minipx-with-ipc.json";
     let config = setup_config(config_path).await?;
 
-    info!("Configuration loaded from: {}", config_path);
+    println!("Configuration loaded from: {}", config_path);
 
     // Start the IPC server
     // This allows CLI tools to discover the running instance and its config path
     // The IPC server runs on a local socket and is not exposed over the network
     ipc::start_ipc_server(config.get_path().clone());
 
-    info!("IPC server started - CLI tools can now discover this instance");
+    println!("IPC server started - CLI tools can now discover this instance");
 
     // Enable hot-reload for configuration changes
     config.watch_config_file();
@@ -65,10 +59,7 @@ async fn main() -> Result<()> {
     println!("╚════════════════════════════════════════════════════════════╝\n");
 
     // Start the proxy servers
-    tokio::try_join!(
-        proxy::start_rp_server(),
-        ssl_server::start_ssl_server()
-    )?;
+    tokio::try_join!(proxy::start_rp_server(), ssl_server::start_ssl_server())?;
 
     Ok(())
 }
@@ -81,29 +72,9 @@ async fn setup_config(config_path: &str) -> Result<Config> {
     config.set_email("admin@example.com".to_string());
 
     // Add some example routes
-    config.add_route(
-        "api.example.com".to_string(),
-        ProxyRoute::new(
-            "localhost".to_string(),
-            "/api".to_string(),
-            3000,
-            false,
-            None,
-            false,
-        ),
-    ).await?;
+    config.add_route("api.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/api".to_string(), 3000, false, None, false)).await?;
 
-    config.add_route(
-        "web.example.com".to_string(),
-        ProxyRoute::new(
-            "localhost".to_string(),
-            "".to_string(),
-            8080,
-            false,
-            None,
-            false,
-        ),
-    ).await?;
+    config.add_route("web.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "".to_string(), 8080, false, None, false)).await?;
 
     config.save().await?;
 
