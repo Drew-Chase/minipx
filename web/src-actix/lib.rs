@@ -4,7 +4,6 @@ use anyhow::Result;
 use log::*;
 use serde_json::json;
 use std::env::set_current_dir;
-use std::path::PathBuf;
 use vite_actix::proxy_vite_options::ProxyViteOptions;
 use vite_actix::start_vite_server;
 
@@ -51,9 +50,16 @@ pub async fn run() -> Result<()> {
     let pool = db::init_database().await?;
     info!("Database initialized successfully");
     let pool_data = web::Data::new(pool);
+
+    // Start background system stats refresher
+    let stats_tx = metrics_endpoint::spawn_system_stats_refresher();
+    info!("System stats refresher started");
+    let stats_data = web::Data::new(stats_tx);
+
     let server = HttpServer::new(move || {
         App::new()
             .app_data(pool_data.clone())
+            .app_data(stats_data.clone())
             .wrap(middleware::Logger::default())
             .wrap(
                 middleware::DefaultHeaders::new()
