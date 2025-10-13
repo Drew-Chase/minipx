@@ -1,5 +1,24 @@
 # Minipx
 
+<div align="center">
+
+[![CI Status](https://img.shields.io/github/actions/workflow/status/Drew-Chase/minipx/ci.yml?branch=master&label=CI&logo=github)](https://github.com/Drew-Chase/minipx/actions/workflows/ci.yml)
+[![Release Status](https://img.shields.io/github/actions/workflow/status/Drew-Chase/minipx/release.yml?label=Release&logo=github)](https://github.com/Drew-Chase/minipx/actions/workflows/release.yml)
+[![Latest Release](https://img.shields.io/github/v/release/Drew-Chase/minipx?logo=github)](https://github.com/Drew-Chase/minipx/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Drew-Chase/minipx/total?logo=github)](https://github.com/Drew-Chase/minipx/releases)
+
+[![GitHub Stars](https://img.shields.io/github/stars/Drew-Chase/minipx?style=social)](https://github.com/Drew-Chase/minipx/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/Drew-Chase/minipx?style=social)](https://github.com/Drew-Chase/minipx/network/members)
+[![GitHub Issues](https://img.shields.io/github/issues/Drew-Chase/minipx)](https://github.com/Drew-Chase/minipx/issues)
+[![License](https://img.shields.io/github/license/Drew-Chase/minipx)](LICENSE)
+
+[![Rust Version](https://img.shields.io/badge/rust-2024%20edition-orange.svg?logo=rust)](https://www.rust-lang.org/)
+[![Platform](https://img.shields.io/badge/platform-Linux%20%7C%20macOS%20%7C%20Windows-blue)](https://github.com/Drew-Chase/minipx/releases)
+
+</div>
+
+---
+
 A fast, lightweight, and configurable reverse proxy written in Rust with automatic SSL certificate management via Let's Encrypt.
 
 ## Overview
