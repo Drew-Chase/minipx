@@ -1,26 +1,2 @@
 [workspace]
-members = ["tools/build-archiver"]
-
-[package]
-name = "minipx"
-version = "1.0.1"
-edition = "2024"
-description = "A simple, configurable TCP/IP reverse proxy"
-authors = ["Drew Chase"]
-license = "MIT"
-
-[dependencies]
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "signal", "fs"] }
-hyper = { version = "=0.14", features = ["full", "http2"] }
-hyper-reverse-proxy = { version = "0.5.1" }
-hyper-tls = "=0.5.0"
-rustls-acme = { version = "0.14", features = ["tokio"] }
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
-anyhow = "1.0.99"
-clap = { version = "4", features = ["derive", "color", "help", "suggestions", "wrap_help", "error-context", "usage", "string", "unicode"] }
-log = "0.4.27"
-pretty_env_logger = { version = "0.5.0" }
-notify = { version = "8.2.0" }
-tokio-stream = { version = "0.1", features = ["net"] }
-interprocess = { version = "2.2.3", features = ["tokio", "async"] }
+members = ["cli", "minipx", "web", "tools/build-archiver"]
