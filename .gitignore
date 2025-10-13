@@ -2,3 +2,4 @@ target
 minipx-*.zip
 .claude/settings.local.json
 CLAUDE.MD
+.idea/copilot*.xml
