@@ -1,15 +1,10 @@
 mod cli;
-mod config;
-mod proxy;
-mod utils;
-mod ipc;
-mod ssl_server;
 
 use crate::cli::MinipxArguments;
-use crate::config::Config;
 use anyhow::Result;
 use clap::Parser;
 use log::{LevelFilter, info, trace};
+use minipx::{config::Config, ipc, proxy, ssl_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {

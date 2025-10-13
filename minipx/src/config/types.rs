@@ -1,5 +1,4 @@
 use anyhow::Result;
-use clap::Args;
 use log::warn;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
@@ -23,34 +22,27 @@ pub struct Config {
     pub(crate) routes: HashMap<String, ProxyRoute>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Args)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProxyRoute {
     #[serde(deserialize_with = "string_or_default", default = "default_host")]
-    #[arg(short = 'j', long = "host", default_value = "localhost", help = "The redirect host")]
     pub(crate) host: String,
 
     #[serde(deserialize_with = "string_or_default", default = "default_path")]
-    #[arg(short = 'p', long = "path", default_value = "", help = "Path to route to (e.g. /api/v1)")]
     pub(crate) path: String,
 
     #[serde(deserialize_with = "u16_or_default", default = "default_port")]
-    #[arg(short = 'P', long = "port", help = "Port to route to, cannot be 80 or 443, and must be between 1 and 65535")]
     pub(crate) port: u16,
 
     #[serde(deserialize_with = "bool_or_default", default)]
-    #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
     pub(crate) ssl_enable: bool,
 
-    #[arg(short = 'l', long = "listen-port", help = "Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS")]
     #[serde(deserialize_with = "u16_option_or_default", default, skip_serializing_if = "Option::is_none")]
     pub(crate) listen_port: Option<u16>,
 
     #[serde(deserialize_with = "bool_or_default", default)]
-    #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
     pub(crate) redirect_to_https: bool,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    #[arg(skip)]
     pub(crate) subroutes: Vec<ProxyPathRoute>
 }
 
@@ -98,6 +90,10 @@ impl Config {
 
     pub fn get_cache_dir(&self) -> &String {
         &self.cache_dir
+    }
+
+    pub fn get_path(&self) -> &PathBuf {
+        &self.path
     }
 
     pub fn get_routes(&self) -> &HashMap<String, ProxyRoute> {
@@ -228,10 +224,22 @@ impl Config {
 }
 
 impl ProxyRoute {
+    pub fn new(host: String, path: String, port: u16, ssl_enable: bool, listen_port: Option<u16>, redirect_to_https: bool) -> Self {
+        Self {
+            host,
+            path,
+            port,
+            ssl_enable,
+            listen_port,
+            redirect_to_https,
+            subroutes: Vec::new(),
+        }
+    }
+
     pub fn is_ssl_enabled(&self) -> bool {
         self.ssl_enable
     }
-    
+
     pub fn get_redirect_to_https(&self) -> bool {
         self.redirect_to_https
     }
@@ -244,11 +252,11 @@ impl ProxyRoute {
     pub fn get_host(&self) -> &str {
         &self.host
     }
-    
+
     pub fn get_port(&self) -> u16 {
         self.port
     }
-    
+
     pub fn get_path(&self) -> &str {
         &self.path
     }

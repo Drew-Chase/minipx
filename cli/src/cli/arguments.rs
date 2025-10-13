@@ -1,7 +1,42 @@
-use crate::config::{Config, ProxyRoute, RoutePatch};
+use minipx::config::{Config, RoutePatch};
 use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use log::{error, info};
+
+/// CLI-specific wrapper for ProxyRoute with clap Args support
+#[derive(Debug, Clone, Args)]
+pub struct ProxyRouteArgs {
+    #[arg(short = 'j', long = "host", default_value = "localhost", help = "The redirect host")]
+    pub host: String,
+
+    #[arg(short = 'p', long = "path", default_value = "", help = "Path to route to (e.g. /api/v1)")]
+    pub path: String,
+
+    #[arg(short = 'P', long = "port", help = "Port to route to, cannot be 80 or 443, and must be between 1 and 65535")]
+    pub port: u16,
+
+    #[arg(short = 's', long = "ssl", default_value = "false", help = "Enable SSL")]
+    pub ssl_enable: bool,
+
+    #[arg(short = 'l', long = "listen-port", help = "Port to listen on for incoming requests, defaults to 80 for HTTP and 443 for HTTPS")]
+    pub listen_port: Option<u16>,
+
+    #[arg(short = 'r', long = "redirect", default_value = "false", help = "Redirect HTTP to HTTPS")]
+    pub redirect_to_https: bool,
+}
+
+impl From<ProxyRouteArgs> for minipx::config::ProxyRoute {
+    fn from(args: ProxyRouteArgs) -> Self {
+        minipx::config::ProxyRoute::new(
+            args.host,
+            args.path,
+            args.port,
+            args.ssl_enable,
+            args.listen_port,
+            args.redirect_to_https,
+        )
+    }
+}
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "minipx", about, author, version, long_about = None, propagate_version = true)]
@@ -35,7 +70,7 @@ pub enum RouteCommands {
     #[clap(name = "add", about = "Add a new proxy route")]
     AddRoute {
         #[clap(flatten)]
-        routes: ProxyRoute,
+        routes: ProxyRouteArgs,
         domain: String,
     },
     #[clap(name = "remove", about = "Remove a proxy route")]
@@ -202,7 +237,7 @@ impl MinipxArguments {
                         config.save().await?;
                     }
                     ConfigCommands::ShowPath => {
-                        println!("{}", config.path.to_string_lossy())
+                        println!("{}", config.get_path().to_string_lossy())
                     }
                 },
             }

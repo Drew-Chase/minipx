@@ -1,2 +1,3 @@
 [workspace]
+resolver = "3"
 members = ["cli", "minipx", "web", "tools/build-archiver"]

@@ -1862,6 +1862,20 @@ checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
 [[package]]
 name = "minipx"
 version = "1.0.1"
+dependencies = [
+ "anyhow",
+ "hyper",
+ "hyper-reverse-proxy",
+ "hyper-tls",
+ "interprocess",
+ "log",
+ "notify",
+ "rustls-acme",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tokio-stream",
+]
 
 [[package]]
 name = "minipx_cli"
@@ -1869,18 +1883,10 @@ version = "1.0.1"
 dependencies = [
  "anyhow",
  "clap",
- "hyper",
- "hyper-reverse-proxy",
- "hyper-tls",
- "interprocess",
  "log",
- "notify",
+ "minipx",
  "pretty_env_logger",
- "rustls-acme",
- "serde",
- "serde_json",
  "tokio",
- "tokio-stream",
 ]
 
 [[package]]
