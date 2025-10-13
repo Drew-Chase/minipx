@@ -1,2 +1,0 @@
-[alias]
-archive = "run --package build-archiver --release"
