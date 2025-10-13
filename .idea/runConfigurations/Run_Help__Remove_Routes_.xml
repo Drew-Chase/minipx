@@ -1,7 +1,7 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run Help (Remove Routes)" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
+  <configuration default="false" name="Run Help (Remove Routes)" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="CLI">
     <option name="buildProfileId" value="test" />
-    <option name="command" value="run -- routes remove --help" />
+    <option name="command" value="run -p minipx_cli -- routes remove --help" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="true" />

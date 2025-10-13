@@ -1,6 +1,6 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="Run Help (Routes)" type="CargoCommandRunConfiguration" factoryName="Cargo Command">
-    <option name="command" value="run -- routes --help" />
+  <configuration default="false" name="Run Help (Routes)" type="CargoCommandRunConfiguration" factoryName="Cargo Command" folderName="CLI">
+    <option name="command" value="run -p minipx_cli -- routes --help" />
     <option name="workingDirectory" value="file://$PROJECT_DIR$" />
     <envs />
     <option name="emulateTerminal" value="true" />
