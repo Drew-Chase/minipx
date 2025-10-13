@@ -222,28 +222,16 @@ mod tests {
         config.set_email("admin@example.com".to_string());
 
         // Add valid SSL-enabled route
-        config.routes.insert(
-            "api.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false),
-        );
+        config.routes.insert("api.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false));
 
         // Add wildcard route (should be invalid for ACME)
-        config.routes.insert(
-            "*.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false),
-        );
+        config.routes.insert("*.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false));
 
         // Add non-SSL route (should be ignored)
-        config.routes.insert(
-            "nossl.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false),
-        );
+        config.routes.insert("nossl.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false));
 
         // Add invalid domain
-        config.routes.insert(
-            "localhost".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false),
-        );
+        config.routes.insert("localhost".to_string(), ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false));
 
         let (valid, invalid) = config.get_valid_domains_for_acme();
 
@@ -261,10 +249,7 @@ mod tests {
         config.set_email("admin@example.com".to_string());
 
         // Add SSL-enabled route
-        config.routes.insert(
-            "api.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false),
-        );
+        config.routes.insert("api.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false));
 
         assert!(config.can_serve_tls_for_host("api.example.com"));
         assert!(!config.can_serve_tls_for_host("other.example.com"));

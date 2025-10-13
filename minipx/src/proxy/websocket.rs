@@ -1,9 +1,9 @@
 use anyhow::Result;
+use hyper::Client;
 use hyper::body::to_bytes;
 use hyper::http::Version;
 use hyper::upgrade;
 use hyper::{Body, Request, Response, StatusCode, header};
-use hyper::{Client};
 use hyper_tls::HttpsConnector;
 use log::{debug, error, warn};
 use std::net::IpAddr;
@@ -11,18 +11,10 @@ use std::time::Instant;
 
 /// Check if the request is a WebSocket upgrade request
 pub fn is_websocket(req: &Request<Body>) -> bool {
-    let has_upgrade_ws = req
-        .headers()
-        .get(header::UPGRADE)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.eq_ignore_ascii_case("websocket"))
-        .unwrap_or(false);
-    let has_connection_upgrade = req
-        .headers()
-        .get(header::CONNECTION)
-        .and_then(|v| v.to_str().ok())
-        .map(|v| v.to_ascii_lowercase().contains("upgrade"))
-        .unwrap_or(false);
+    let has_upgrade_ws =
+        req.headers().get(header::UPGRADE).and_then(|v| v.to_str().ok()).map(|v| v.eq_ignore_ascii_case("websocket")).unwrap_or(false);
+    let has_connection_upgrade =
+        req.headers().get(header::CONNECTION).and_then(|v| v.to_str().ok()).map(|v| v.to_ascii_lowercase().contains("upgrade")).unwrap_or(false);
     has_upgrade_ws && has_connection_upgrade
 }
 
@@ -38,12 +30,9 @@ pub async fn proxy_websocket(
 ) -> Result<Response<Body>> {
     // Build upstream URI: strip subroute path if present, then add requested path_and_query
     let suffix = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
-    
-    let upstream_path = if !subroute_path.is_empty() && suffix.starts_with(subroute_path) {
-        suffix.strip_prefix(subroute_path).unwrap_or("/")
-    } else {
-        suffix
-    };
+
+    let upstream_path =
+        if !subroute_path.is_empty() && suffix.starts_with(subroute_path) { suffix.strip_prefix(subroute_path).unwrap_or("/") } else { suffix };
 
     // For WebSocket upgrades, always use http:// for upstream connections
     // TLS is terminated at the proxy, so backend connections are plain HTTP
@@ -54,10 +43,7 @@ pub async fn proxy_websocket(
     let req = Request::from_parts(req_parts, req_body);
 
     // Prepare a WebSocket handshake request to upstream (force HTTP/1.1)
-    let mut builder = Request::builder()
-        .method(req.method())
-        .version(Version::HTTP_11)
-        .uri(&upstream_uri);
+    let mut builder = Request::builder().method(req.method()).version(Version::HTTP_11).uri(&upstream_uri);
 
     // Copy headers, but fix Host and X-Forwarded-For
     {
@@ -221,10 +207,7 @@ pub async fn proxy_websocket(
                 host = upstream_host,
                 scheme = upstream_scheme
             );
-            Ok(Response::builder()
-                .status(StatusCode::BAD_GATEWAY)
-                .header("Content-Type", "text/plain")
-                .body(Body::from("Bad Gateway"))?)
+            Ok(Response::builder().status(StatusCode::BAD_GATEWAY).header("Content-Type", "text/plain").body(Body::from("Bad Gateway"))?)
         }
     }
 }

@@ -1,15 +1,15 @@
-use actix_web::{web, HttpResponse, Result as ActixResult, get, post, put, delete};
 use actix_multipart::Multipart;
+use actix_web::{HttpResponse, Result as ActixResult, delete, get, post, put, web};
+use chrono::Utc;
 use futures_util::StreamExt;
+use log::*;
 use sqlx::SqlitePool;
 use std::fs;
 use std::path::PathBuf;
 use uuid::Uuid;
-use chrono::Utc;
-use log::*;
 
-use crate::models::*;
 use crate::http_error::Error;
+use crate::models::*;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
     cfg.service(
@@ -22,44 +22,34 @@ pub fn configure(cfg: &mut web::ServiceConfig) {
             .service(start_server)
             .service(stop_server)
             .service(restart_server)
-            .service(upload_binary)
+            .service(upload_binary),
     );
 }
 
 #[get("")]
 async fn list_servers(pool: web::Data<SqlitePool>) -> ActixResult<HttpResponse> {
-    let servers = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers ORDER BY created_at DESC"
-    )
-    .fetch_all(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
+    let servers = sqlx::query_as::<_, Server>("SELECT * FROM servers ORDER BY created_at DESC")
+        .fetch_all(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     Ok(HttpResponse::Ok().json(servers))
 }
 
 #[get("/{id}")]
-async fn get_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-) -> ActixResult<HttpResponse> {
-    let server = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers WHERE id = ?"
-    )
-    .bind(id.as_str())
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
-    .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
+async fn get_server(pool: web::Data<SqlitePool>, id: web::Path<String>) -> ActixResult<HttpResponse> {
+    let server = sqlx::query_as::<_, Server>("SELECT * FROM servers WHERE id = ?")
+        .bind(id.as_str())
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
+        .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
 
     Ok(HttpResponse::Ok().json(server))
 }
 
 #[post("")]
-async fn create_server(
-    pool: web::Data<SqlitePool>,
-    req: web::Json<CreateServerRequest>,
-) -> ActixResult<HttpResponse> {
+async fn create_server(pool: web::Data<SqlitePool>, req: web::Json<CreateServerRequest>) -> ActixResult<HttpResponse> {
     let id = Uuid::new_v4().to_string();
     let now = Utc::now().to_rfc3339();
 
@@ -70,8 +60,7 @@ async fn create_server(
 
     // Create servers directory if it doesn't exist
     let servers_dir = PathBuf::from("servers").join(&id);
-    fs::create_dir_all(&servers_dir)
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to create server directory: {}", e)))?;
+    fs::create_dir_all(&servers_dir).map_err(|e| Error::from(anyhow::anyhow!("Failed to create server directory: {}", e)))?;
 
     let binary_path = servers_dir.to_str().unwrap().to_string();
 
@@ -97,53 +86,36 @@ async fn create_server(
     .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     // Add route to minipx config
-    let mut config = minipx::config::Config::try_load("./minipx.json").await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
+    let mut config =
+        minipx::config::Config::try_load("./minipx.json").await.map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
 
-    let route = minipx::config::ProxyRoute::new(
-        host.clone(),
-        path.clone(),
-        req.port,
-        ssl_enabled,
-        req.listen_port,
-        redirect_to_https,
-    );
+    let route = minipx::config::ProxyRoute::new(host.clone(), path.clone(), req.port, ssl_enabled, req.listen_port, redirect_to_https);
 
-    config.add_route(req.domain.clone(), route).await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to add route: {}", e)))?;
+    config.add_route(req.domain.clone(), route).await.map_err(|e| Error::from(anyhow::anyhow!("Failed to add route: {}", e)))?;
 
-    config.save().await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
+    config.save().await.map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
 
-    let server = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers WHERE id = ?"
-    )
-    .bind(&id)
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
+    let server = sqlx::query_as::<_, Server>("SELECT * FROM servers WHERE id = ?")
+        .bind(&id)
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     info!("Created server: {} ({})", server.name, server.id);
     Ok(HttpResponse::Created().json(server))
 }
 
 #[put("/{id}")]
-async fn update_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-    req: web::Json<UpdateServerRequest>,
-) -> ActixResult<HttpResponse> {
+async fn update_server(pool: web::Data<SqlitePool>, id: web::Path<String>, req: web::Json<UpdateServerRequest>) -> ActixResult<HttpResponse> {
     let now = Utc::now().to_rfc3339();
 
     // Get existing server
-    let existing = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers WHERE id = ?"
-    )
-    .bind(id.as_str())
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
-    .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
+    let existing = sqlx::query_as::<_, Server>("SELECT * FROM servers WHERE id = ?")
+        .bind(id.as_str())
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
+        .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
 
     let name = req.name.clone().unwrap_or(existing.name);
     let domain = req.domain.clone().unwrap_or(existing.domain.clone());
@@ -158,7 +130,7 @@ async fn update_server(
     sqlx::query(
         "UPDATE servers SET name = ?, domain = ?, host = ?, port = ?, path = ?,
          ssl_enabled = ?, redirect_to_https = ?, listen_port = ?, status = ?, updated_at = ?
-         WHERE id = ?"
+         WHERE id = ?",
     )
     .bind(&name)
     .bind(&domain)
@@ -177,53 +149,37 @@ async fn update_server(
 
     // Update minipx config if domain changed
     if domain != existing.domain {
-        let mut config = minipx::config::Config::try_load("./minipx.json").await
-            .map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
+        let mut config =
+            minipx::config::Config::try_load("./minipx.json").await.map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
 
-        config.remove_route(&existing.domain).await
-            .map_err(|e| Error::from(anyhow::anyhow!("Failed to remove old route: {}", e)))?;
+        config.remove_route(&existing.domain).await.map_err(|e| Error::from(anyhow::anyhow!("Failed to remove old route: {}", e)))?;
 
-        let route = minipx::config::ProxyRoute::new(
-            host.clone(),
-            path.clone(),
-            port as u16,
-            ssl_enabled,
-            listen_port.map(|p| p as u16),
-            redirect_to_https,
-        );
+        let route =
+            minipx::config::ProxyRoute::new(host.clone(), path.clone(), port as u16, ssl_enabled, listen_port.map(|p| p as u16), redirect_to_https);
 
-        config.add_route(domain.clone(), route).await
-            .map_err(|e| Error::from(anyhow::anyhow!("Failed to add route: {}", e)))?;
+        config.add_route(domain.clone(), route).await.map_err(|e| Error::from(anyhow::anyhow!("Failed to add route: {}", e)))?;
 
-        config.save().await
-            .map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
+        config.save().await.map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
     }
 
-    let server = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers WHERE id = ?"
-    )
-    .bind(id.as_str())
-    .fetch_one(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
+    let server = sqlx::query_as::<_, Server>("SELECT * FROM servers WHERE id = ?")
+        .bind(id.as_str())
+        .fetch_one(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     info!("Updated server: {} ({})", server.name, server.id);
     Ok(HttpResponse::Ok().json(server))
 }
 
 #[delete("/{id}")]
-async fn delete_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-) -> ActixResult<HttpResponse> {
-    let server = sqlx::query_as::<_, Server>(
-        "SELECT * FROM servers WHERE id = ?"
-    )
-    .bind(id.as_str())
-    .fetch_optional(pool.get_ref())
-    .await
-    .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
-    .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
+async fn delete_server(pool: web::Data<SqlitePool>, id: web::Path<String>) -> ActixResult<HttpResponse> {
+    let server = sqlx::query_as::<_, Server>("SELECT * FROM servers WHERE id = ?")
+        .bind(id.as_str())
+        .fetch_optional(pool.get_ref())
+        .await
+        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?
+        .ok_or_else(|| Error::from(anyhow::anyhow!("Server not found")))?;
 
     // Remove from database
     sqlx::query("DELETE FROM servers WHERE id = ?")
@@ -233,14 +189,12 @@ async fn delete_server(
         .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     // Remove from minipx config
-    let mut config = minipx::config::Config::try_load("./minipx.json").await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
+    let mut config =
+        minipx::config::Config::try_load("./minipx.json").await.map_err(|e| Error::from(anyhow::anyhow!("Failed to load config: {}", e)))?;
 
-    config.remove_route(&server.domain).await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to remove route: {}", e)))?;
+    config.remove_route(&server.domain).await.map_err(|e| Error::from(anyhow::anyhow!("Failed to remove route: {}", e)))?;
 
-    config.save().await
-        .map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
+    config.save().await.map_err(|e| Error::from(anyhow::anyhow!("Failed to save config: {}", e)))?;
 
     // Delete server directory
     let _ = fs::remove_dir_all(&server.binary_path);
@@ -250,10 +204,7 @@ async fn delete_server(
 }
 
 #[post("/{id}/start")]
-async fn start_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-) -> ActixResult<HttpResponse> {
+async fn start_server(pool: web::Data<SqlitePool>, id: web::Path<String>) -> ActixResult<HttpResponse> {
     sqlx::query("UPDATE servers SET status = 'running' WHERE id = ?")
         .bind(id.as_str())
         .execute(pool.get_ref())
@@ -264,10 +215,7 @@ async fn start_server(
 }
 
 #[post("/{id}/stop")]
-async fn stop_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-) -> ActixResult<HttpResponse> {
+async fn stop_server(pool: web::Data<SqlitePool>, id: web::Path<String>) -> ActixResult<HttpResponse> {
     sqlx::query("UPDATE servers SET status = 'stopped' WHERE id = ?")
         .bind(id.as_str())
         .execute(pool.get_ref())
@@ -278,10 +226,7 @@ async fn stop_server(
 }
 
 #[post("/{id}/restart")]
-async fn restart_server(
-    pool: web::Data<SqlitePool>,
-    id: web::Path<String>,
-) -> ActixResult<HttpResponse> {
+async fn restart_server(pool: web::Data<SqlitePool>, id: web::Path<String>) -> ActixResult<HttpResponse> {
     sqlx::query("UPDATE servers SET status = 'restarting' WHERE id = ?")
         .bind(id.as_str())
         .execute(pool.get_ref())
@@ -302,10 +247,7 @@ async fn restart_server(
 }
 
 #[post("/upload")]
-async fn upload_binary(
-    _pool: web::Data<SqlitePool>,
-    mut payload: Multipart,
-) -> ActixResult<HttpResponse> {
+async fn upload_binary(_pool: web::Data<SqlitePool>, mut payload: Multipart) -> ActixResult<HttpResponse> {
     let mut server_id: Option<String> = None;
     let mut file_saved = false;
 
@@ -330,18 +272,15 @@ async fn upload_binary(
 
             let sid = server_id.as_ref().unwrap();
             let server_dir = PathBuf::from("servers").join(sid);
-            fs::create_dir_all(&server_dir)
-                .map_err(|e| Error::from(anyhow::anyhow!("Failed to create directory: {}", e)))?;
+            fs::create_dir_all(&server_dir).map_err(|e| Error::from(anyhow::anyhow!("Failed to create directory: {}", e)))?;
 
             let filepath = server_dir.join(filename);
-            let mut file = fs::File::create(&filepath)
-                .map_err(|e| Error::from(anyhow::anyhow!("Failed to create file: {}", e)))?;
+            let mut file = fs::File::create(&filepath).map_err(|e| Error::from(anyhow::anyhow!("Failed to create file: {}", e)))?;
 
             while let Some(chunk) = field.next().await {
                 let data = chunk.map_err(|e| Error::from(anyhow::anyhow!("Chunk read error: {}", e)))?;
                 use std::io::Write;
-                file.write_all(&data)
-                    .map_err(|e| Error::from(anyhow::anyhow!("Failed to write file: {}", e)))?;
+                file.write_all(&data).map_err(|e| Error::from(anyhow::anyhow!("Failed to write file: {}", e)))?;
             }
 
             // Check if it's an archive and extract if needed

@@ -1,5 +1,5 @@
 use crate::asset_endpoint::AssetsAppConfig;
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_web::{App, HttpResponse, HttpServer, middleware, web};
 use anyhow::Result;
 use log::*;
 use serde_json::json;
@@ -24,7 +24,6 @@ pub async fn run() -> Result<()> {
 
     // Start the Vite server in development mode
     if DEBUG {
-
         // setup serde hashids
         serde_hash::hashids::SerdeHashOptions::new().with_min_length(16).with_salt("minipx-web-panel").build();
 

@@ -1,5 +1,5 @@
+use crate::config::manager::{broadcaster, config_lock};
 use crate::config::types::Config;
-use crate::config::manager::{config_lock, broadcaster};
 use crate::ipc;
 use crate::utils::validation::is_empty_or_whitespace;
 use anyhow::Result;
@@ -64,7 +64,6 @@ impl Config {
 
         Ok(config)
     }
-
 
     /// Save the current configuration to its file
     pub async fn save(&self) -> Result<()> {

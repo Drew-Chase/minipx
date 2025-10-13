@@ -1,5 +1,5 @@
 pub mod config;
+pub mod ipc;
 pub mod proxy;
 pub mod ssl_server;
-pub mod ipc;
 pub mod utils;

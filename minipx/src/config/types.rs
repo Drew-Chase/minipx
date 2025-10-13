@@ -1,11 +1,11 @@
+use crate::utils::path::trim_trailing_slash;
+use crate::utils::validation::validate_custom_port;
 use anyhow::Result;
 use log::warn;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::collections::HashMap;
 use std::fmt::Display;
 use std::path::{Path, PathBuf};
-use crate::utils::path::trim_trailing_slash;
-use crate::utils::validation::validate_custom_port;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -43,7 +43,7 @@ pub struct ProxyRoute {
     pub(crate) redirect_to_https: bool,
 
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub(crate) subroutes: Vec<ProxyPathRoute>
+    pub(crate) subroutes: Vec<ProxyPathRoute>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,7 +52,7 @@ pub struct ProxyPathRoute {
     pub path: String,
 
     #[serde(deserialize_with = "u16_or_default", default = "default_port")]
-    pub port: u16
+    pub port: u16,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -110,7 +110,7 @@ impl Config {
 
     pub async fn add_route(&mut self, domain: String, route: impl Into<ProxyRoute>) -> Result<()> {
         use log::{info, warn};
-        
+
         let mut route = route.into();
         info!("Adding route: {} -> {}:{}{}", domain, route.host, route.port, route.path);
         if self.routes.contains_key(&domain) {
@@ -129,7 +129,7 @@ impl Config {
 
     pub async fn remove_route(&mut self, host: impl AsRef<str>) -> Result<()> {
         use log::{info, warn};
-        
+
         info!("Removing route: {}", host.as_ref());
         if self.routes.remove(host.as_ref()).is_none() {
             warn!("Route not found: {}", host.as_ref());
@@ -140,7 +140,7 @@ impl Config {
     // Apply a partial update to an existing route identified by domain (the map key).
     pub async fn update_route(&mut self, domain: &str, patch: RoutePatch) -> Result<()> {
         use log::warn;
-        
+
         let route = self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
 
         if let Some(host) = patch.host {
@@ -181,19 +181,19 @@ impl Config {
     // Add a subroute to an existing route
     pub async fn add_subroute(&mut self, domain: &str, path: String, port: u16) -> Result<()> {
         use log::{info, warn};
-        
+
         let route = self.routes.get_mut(domain).ok_or_else(|| anyhow::anyhow!(format!("Route not found: {}", domain)))?;
-        
+
         // Validate port
         if let Err(err) = validate_custom_port(port) {
             return Err(anyhow::anyhow!(err));
         }
-        
+
         // Check if port conflicts with parent route
         if port == route.port {
             return Err(anyhow::anyhow!("Subroute port cannot be the same as the parent route port: {}", port));
         }
-        
+
         // Clean up path
         let mut clean_path = path;
         if clean_path.ends_with('/') {
@@ -204,19 +204,16 @@ impl Config {
             clean_path = format!("/{}", clean_path);
             info!("Path should start with '/', prepended: {}", clean_path);
         }
-        
+
         // Check for duplicate subroute paths
         for existing_subroute in &route.subroutes {
             if existing_subroute.path == clean_path {
                 return Err(anyhow::anyhow!("Subroute already exists for path: {}", clean_path));
             }
         }
-        
-        let subroute = ProxyPathRoute {
-            path: clean_path.clone(),
-            port,
-        };
-        
+
+        let subroute = ProxyPathRoute { path: clean_path.clone(), port };
+
         route.subroutes.push(subroute);
         info!("Added subroute to {}: {} -> port {}", domain, clean_path, port);
         Ok(())
@@ -225,15 +222,7 @@ impl Config {
 
 impl ProxyRoute {
     pub fn new(host: String, path: String, port: u16, ssl_enable: bool, listen_port: Option<u16>, redirect_to_https: bool) -> Self {
-        Self {
-            host,
-            path,
-            port,
-            ssl_enable,
-            listen_port,
-            redirect_to_https,
-            subroutes: Vec::new(),
-        }
+        Self { host, path, port, ssl_enable, listen_port, redirect_to_https, subroutes: Vec::new() }
     }
 
     pub fn is_ssl_enabled(&self) -> bool {
@@ -367,10 +356,7 @@ mod tests {
     #[test]
     fn test_lookup_host_exact_match() {
         let mut config = Config::default();
-        config.routes.insert(
-            "api.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, false, None, false),
-        );
+        config.routes.insert("api.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, false, None, false));
 
         let route = config.lookup_host("api.example.com");
         assert!(route.is_some());
@@ -381,10 +367,7 @@ mod tests {
     #[test]
     fn test_lookup_host_wildcard_match() {
         let mut config = Config::default();
-        config.routes.insert(
-            "*.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false),
-        );
+        config.routes.insert("*.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false));
 
         // Should match wildcard
         let route = config.lookup_host("api.example.com");
@@ -405,14 +388,10 @@ mod tests {
     #[test]
     fn test_lookup_host_exact_over_wildcard() {
         let mut config = Config::default();
-        config.routes.insert(
-            "*.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/wildcard".to_string(), 8080, false, None, false),
-        );
-        config.routes.insert(
-            "api.example.com".to_string(),
-            ProxyRoute::new("localhost".to_string(), "/exact".to_string(), 9090, false, None, false),
-        );
+        config
+            .routes
+            .insert("*.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/wildcard".to_string(), 8080, false, None, false));
+        config.routes.insert("api.example.com".to_string(), ProxyRoute::new("localhost".to_string(), "/exact".to_string(), 9090, false, None, false));
 
         // Exact match should take precedence
         let route = config.lookup_host("api.example.com");
@@ -479,10 +458,7 @@ mod tests {
         let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
         config.add_route("api.example.com".to_string(), route).await.unwrap();
 
-        let patch = RoutePatch {
-            host: Some("127.0.0.1".to_string()),
-            ..Default::default()
-        };
+        let patch = RoutePatch { host: Some("127.0.0.1".to_string()), ..Default::default() };
         let result = config.update_route("api.example.com", patch).await;
         assert!(result.is_ok());
         assert_eq!(config.lookup_host("api.example.com").unwrap().get_host(), "127.0.0.1");
@@ -494,10 +470,7 @@ mod tests {
         let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
         config.add_route("api.example.com".to_string(), route).await.unwrap();
 
-        let patch = RoutePatch {
-            port: Some(9090),
-            ..Default::default()
-        };
+        let patch = RoutePatch { port: Some(9090), ..Default::default() };
         let result = config.update_route("api.example.com", patch).await;
         assert!(result.is_ok());
         assert_eq!(config.lookup_host("api.example.com").unwrap().get_port(), 9090);
@@ -509,10 +482,7 @@ mod tests {
         let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
         config.add_route("api.example.com".to_string(), route).await.unwrap();
 
-        let patch = RoutePatch {
-            port: Some(443),
-            ..Default::default()
-        };
+        let patch = RoutePatch { port: Some(443), ..Default::default() };
         let result = config.update_route("api.example.com", patch).await;
         assert!(result.is_err());
     }
@@ -520,10 +490,7 @@ mod tests {
     #[tokio::test]
     async fn test_update_route_not_found() {
         let mut config = Config::default();
-        let patch = RoutePatch {
-            host: Some("127.0.0.1".to_string()),
-            ..Default::default()
-        };
+        let patch = RoutePatch { host: Some("127.0.0.1".to_string()), ..Default::default() };
         let result = config.update_route("nonexistent.example.com", patch).await;
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("not found"));
@@ -593,14 +560,7 @@ mod tests {
 
     #[test]
     fn test_proxy_route_getters() {
-        let route = ProxyRoute::new(
-            "localhost".to_string(),
-            "/api/v1".to_string(),
-            8080,
-            true,
-            Some(8443),
-            true,
-        );
+        let route = ProxyRoute::new("localhost".to_string(), "/api/v1".to_string(), 8080, true, Some(8443), true);
 
         assert_eq!(route.get_host(), "localhost");
         assert_eq!(route.get_path(), "/api/v1");

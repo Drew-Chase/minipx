@@ -7,10 +7,10 @@
 // - manager: Global state management and broadcasting
 // - watcher: File watching functionality
 
-pub mod types;
 pub mod loader;
-pub mod validator;
 pub mod manager;
+pub mod types;
+pub mod validator;
 pub mod watcher;
 
 // Re-export main types for backward compatibility

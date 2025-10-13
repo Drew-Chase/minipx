@@ -7,7 +7,7 @@ use std::net::SocketAddr;
 pub async fn setup_forwarders() {
     let config = Config::get().await;
     let mut listeners: BTreeMap<u16, (String, u16)> = BTreeMap::new();
-    
+
     // Collect unique listen ports (excluding 80/443)
     for route in config.get_routes().values() {
         #[allow(clippy::collapsible_if)]

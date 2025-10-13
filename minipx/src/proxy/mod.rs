@@ -7,10 +7,10 @@
 // - websocket: WebSocket handling logic
 // - forwarder: TCP/UDP forwarding logic
 
+pub mod forwarder;
 pub mod http_server;
 pub mod request_handler;
 pub mod websocket;
-pub mod forwarder;
 
 // Re-export main function for backward compatibility
 pub use http_server::start_rp_server;

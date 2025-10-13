@@ -1,7 +1,7 @@
-use minipx::config::{Config, RoutePatch};
 use anyhow::Result;
 use clap::{ArgAction, Args, Parser, Subcommand};
 use log::{error, info};
+use minipx::config::{Config, RoutePatch};
 
 /// CLI-specific wrapper for ProxyRoute with clap Args support
 #[derive(Debug, Clone, Args)]
@@ -27,14 +27,7 @@ pub struct ProxyRouteArgs {
 
 impl From<ProxyRouteArgs> for minipx::config::ProxyRoute {
     fn from(args: ProxyRouteArgs) -> Self {
-        minipx::config::ProxyRoute::new(
-            args.host,
-            args.path,
-            args.port,
-            args.ssl_enable,
-            args.listen_port,
-            args.redirect_to_https,
-        )
+        minipx::config::ProxyRoute::new(args.host, args.path, args.port, args.ssl_enable, args.listen_port, args.redirect_to_https)
     }
 }
 
@@ -314,15 +307,7 @@ mod tests {
 
     #[test]
     fn test_update_route_options_to_route_patch_ssl_disable() {
-        let options = UpdateRouteOptions {
-            host: None,
-            path: None,
-            port: None,
-            ssl: false,
-            no_ssl: true,
-            redirect: false,
-            no_redirect: false,
-        };
+        let options = UpdateRouteOptions { host: None, path: None, port: None, ssl: false, no_ssl: true, redirect: false, no_redirect: false };
 
         let patch: RoutePatch = options.into();
         assert_eq!(patch.host, None);
@@ -331,15 +316,7 @@ mod tests {
 
     #[test]
     fn test_update_route_options_to_route_patch_redirect_disable() {
-        let options = UpdateRouteOptions {
-            host: None,
-            path: None,
-            port: None,
-            ssl: false,
-            no_ssl: false,
-            redirect: false,
-            no_redirect: true,
-        };
+        let options = UpdateRouteOptions { host: None, path: None, port: None, ssl: false, no_ssl: false, redirect: false, no_redirect: true };
 
         let patch: RoutePatch = options.into();
         assert_eq!(patch.redirect_to_https, Some(false));
@@ -347,15 +324,7 @@ mod tests {
 
     #[test]
     fn test_update_route_options_to_route_patch_no_changes() {
-        let options = UpdateRouteOptions {
-            host: None,
-            path: None,
-            port: None,
-            ssl: false,
-            no_ssl: false,
-            redirect: false,
-            no_redirect: false,
-        };
+        let options = UpdateRouteOptions { host: None, path: None, port: None, ssl: false, no_ssl: false, redirect: false, no_redirect: false };
 
         let patch: RoutePatch = options.into();
         assert_eq!(patch.host, None);

@@ -30,9 +30,9 @@ async fn main() -> Result<()> {
         "localhost".to_string(),
         "".to_string(),
         8080,
-        true,  // SSL enabled
-        None,  // Default HTTPS port (443)
-        true,  // Redirect HTTP to HTTPS
+        true, // SSL enabled
+        None, // Default HTTPS port (443)
+        true, // Redirect HTTP to HTTPS
     );
     config.add_route("example.com".to_string(), main_route).await?;
     println!("   ✓ example.com -> localhost:8080 [HTTPS with redirect]");
@@ -42,7 +42,7 @@ async fn main() -> Result<()> {
     let api_route = ProxyRoute::new(
         "localhost".to_string(),
         "/api".to_string(),
-        3000,  // Default API backend
+        3000, // Default API backend
         true,
         None,
         true,
@@ -66,7 +66,7 @@ async fn main() -> Result<()> {
         "localhost".to_string(),
         "".to_string(),
         4000,
-        false,  // No SSL for dev environments
+        false, // No SSL for dev environments
         None,
         false,
     );
@@ -76,14 +76,7 @@ async fn main() -> Result<()> {
 
     // 4. Static file server with subroutes
     println!("\n4. Static File Server with Media Subroutes");
-    let static_route = ProxyRoute::new(
-        "localhost".to_string(),
-        "".to_string(),
-        8081,
-        true,
-        None,
-        false,
-    );
+    let static_route = ProxyRoute::new("localhost".to_string(), "".to_string(), 8081, true, None, false);
     config.add_route("static.example.com".to_string(), static_route).await?;
     println!("   ✓ static.example.com -> localhost:8081 [HTTPS]");
 
@@ -98,9 +91,9 @@ async fn main() -> Result<()> {
     let game_route = ProxyRoute::new(
         "192.168.1.100".to_string(),
         "".to_string(),
-        7777,     // Backend game server port
-        false,    // No SSL for custom ports
-        Some(25565),  // Listen on Minecraft default port
+        7777,        // Backend game server port
+        false,       // No SSL for custom ports
+        Some(25565), // Listen on Minecraft default port
         false,
     );
     config.add_route("game.example.com".to_string(), game_route).await?;
@@ -112,7 +105,7 @@ async fn main() -> Result<()> {
         "localhost".to_string(),
         "/ws".to_string(),
         5000,
-        true,  // WSS (WebSocket over SSL)
+        true, // WSS (WebSocket over SSL)
         None,
         true,
     );
@@ -124,7 +117,7 @@ async fn main() -> Result<()> {
     let services_route = ProxyRoute::new(
         "localhost".to_string(),
         "".to_string(),
-        9000,  // Default service
+        9000, // Default service
         true,
         None,
         true,
@@ -148,8 +141,8 @@ async fn main() -> Result<()> {
         "10.0.0.10".to_string(),
         "/admin".to_string(),
         3000,
-        false,  // No SSL for internal admin
-        Some(8888),  // Custom port for admin access
+        false,      // No SSL for internal admin
+        Some(8888), // Custom port for admin access
         false,
     );
     config.add_route("admin.internal".to_string(), admin_route).await?;

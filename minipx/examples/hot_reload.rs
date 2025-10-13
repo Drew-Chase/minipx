@@ -14,8 +14,8 @@
 //! # The server will automatically detect and apply changes
 //! ```
 
-use minipx::{config::Config, proxy, ssl_server};
 use anyhow::Result;
+use minipx::{config::Config, proxy, ssl_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -70,10 +70,7 @@ async fn main() -> Result<()> {
     // Start the proxy servers
     // Note: Configuration changes will be automatically picked up
     // by the running servers without requiring a restart
-    tokio::try_join!(
-        proxy::start_rp_server(),
-        ssl_server::start_ssl_server()
-    )?;
+    tokio::try_join!(proxy::start_rp_server(), ssl_server::start_ssl_server())?;
 
     Ok(())
 }
@@ -88,29 +85,9 @@ async fn setup_initial_config(config_path: &str) -> Result<()> {
     config.set_email("admin@example.com".to_string());
 
     // Add some initial routes
-    config.add_route(
-        "api.localhost".to_string(),
-        ProxyRoute::new(
-            "localhost".to_string(),
-            "/api".to_string(),
-            3000,
-            false,
-            None,
-            false,
-        ),
-    ).await?;
+    config.add_route("api.localhost".to_string(), ProxyRoute::new("localhost".to_string(), "/api".to_string(), 3000, false, None, false)).await?;
 
-    config.add_route(
-        "web.localhost".to_string(),
-        ProxyRoute::new(
-            "localhost".to_string(),
-            "".to_string(),
-            8080,
-            false,
-            None,
-            false,
-        ),
-    ).await?;
+    config.add_route("web.localhost".to_string(), ProxyRoute::new("localhost".to_string(), "".to_string(), 8080, false, None, false)).await?;
 
     config.save().await?;
     println!("Initial configuration saved");

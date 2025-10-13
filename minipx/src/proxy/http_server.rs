@@ -1,5 +1,5 @@
-use crate::proxy::request_handler::handle_request_with_scheme;
 use crate::proxy::forwarder::setup_forwarders;
+use crate::proxy::request_handler::handle_request_with_scheme;
 use anyhow::Result;
 use hyper::server::conn::AddrStream;
 use hyper::service::{make_service_fn, service_fn};
@@ -32,10 +32,7 @@ async fn start_http_server() -> Result<()> {
                             Ok(resp) => Ok::<_, Infallible>(resp),
                             Err(e) => {
                                 error!("handle_request error from {}: {}", client_ip, e);
-                                Ok::<_, Infallible>(Response::builder()
-                                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                                    .body(Body::empty())
-                                    .unwrap())
+                                Ok::<_, Infallible>(Response::builder().status(StatusCode::INTERNAL_SERVER_ERROR).body(Body::empty()).unwrap())
                             }
                         }
                     }

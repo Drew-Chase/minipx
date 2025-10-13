@@ -1,6 +1,6 @@
 pub(crate) use actix_web::error::HttpError;
-use actix_web::http::header::ToStrError;
 use actix_web::http::StatusCode;
+use actix_web::http::header::ToStrError;
 use actix_web::{HttpResponse, ResponseError};
 use anyhow::anyhow;
 use serde_json::json;
@@ -75,24 +75,20 @@ impl ResponseError for Error {
             // Parse backtrace into a structured format
             let frames = parse_backtrace(&backtrace_str);
 
-            return HttpResponse::build(status_code)
-                .content_type("application/json")
-                .json(json!({
-                    "message": error_message,
-                    "status": status_code.as_u16(),
-                    "stacktrace": frames
-                }));
+            return HttpResponse::build(status_code).content_type("application/json").json(json!({
+                "message": error_message,
+                "status": status_code.as_u16(),
+                "stacktrace": frames
+            }));
         }
 
         #[cfg(not(debug_assertions))]
         {
             // For production - no stacktrace
-            HttpResponse::build(status_code)
-                .content_type("application/json")
-                .json(json!({
-                    "message": error_message,
-                    "status": status_code.as_u16()
-                }))
+            HttpResponse::build(status_code).content_type("application/json").json(json!({
+                "message": error_message,
+                "status": status_code.as_u16()
+            }))
         }
     }
 }
@@ -135,10 +131,7 @@ impl From<HttpError> for Error {
 /// Conversion from HttpResponse to custom Error type
 impl From<HttpResponse> for Error {
     fn from(err: HttpResponse) -> Self {
-        Error::Anyhow(anyhow!(
-            "HTTP response error: {}",
-            err.status().canonical_reason().unwrap_or("")
-        ))
+        Error::Anyhow(anyhow!("HTTP response error: {}", err.status().canonical_reason().unwrap_or("")))
     }
 }
 
@@ -197,11 +190,7 @@ fn extract_line_number(location: &str) -> (String, i32) {
 fn absolute_path(path: String) -> String {
     if path.starts_with(".") {
         // Handle relative path starting from current directory
-        std::env::current_dir()
-            .map(|p| p.join(path).canonicalize().unwrap_or_default())
-            .unwrap_or_default()
-            .to_string_lossy()
-            .to_string()
+        std::env::current_dir().map(|p| p.join(path).canonicalize().unwrap_or_default()).unwrap_or_default().to_string_lossy().to_string()
     } else {
         // Path is already absolute; just clean it up
         Path::new(&path).to_path_buf().to_string_lossy().to_string()

@@ -49,19 +49,13 @@ mod tests {
     fn test_validate_custom_port_reserved() {
         assert!(validate_custom_port(80).is_err());
         assert!(validate_custom_port(443).is_err());
-        assert_eq!(
-            validate_custom_port(80).unwrap_err(),
-            "Port cannot be 80 or 443 (reserved for HTTP/HTTPS)"
-        );
+        assert_eq!(validate_custom_port(80).unwrap_err(), "Port cannot be 80 or 443 (reserved for HTTP/HTTPS)");
     }
 
     #[test]
     fn test_validate_custom_port_invalid() {
         assert!(validate_custom_port(0).is_err());
-        assert_eq!(
-            validate_custom_port(0).unwrap_err(),
-            "Port must be between 1 and 65535"
-        );
+        assert_eq!(validate_custom_port(0).unwrap_err(), "Port must be between 1 and 65535");
     }
 
     #[test]
@@ -76,10 +70,7 @@ mod tests {
     #[test]
     fn test_validate_port_range_invalid() {
         assert!(validate_port_range(0).is_err());
-        assert_eq!(
-            validate_port_range(0).unwrap_err(),
-            "Port must be between 1 and 65535"
-        );
+        assert_eq!(validate_port_range(0).unwrap_err(), "Port must be between 1 and 65535");
     }
 
     #[test]

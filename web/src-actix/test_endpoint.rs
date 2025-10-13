@@ -1,5 +1,5 @@
-use actix_web::{get, web, HttpResponse, Responder};
 use crate::http_error::Result;
+use actix_web::{HttpResponse, Responder, get, web};
 use serde_json::json;
 /// Handles requests to check the server status.
 ///
@@ -12,9 +12,9 @@ use serde_json::json;
 /// A JSON object with a `status` field set to "ok".
 #[get("")]
 async fn status() -> Result<impl Responder> {
-	Ok(HttpResponse::Ok().json(json!({ "status": "ok" })))
+    Ok(HttpResponse::Ok().json(json!({ "status": "ok" })))
 }
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-	cfg.service(web::scope("/").service(status));
+    cfg.service(web::scope("/").service(status));
 }
