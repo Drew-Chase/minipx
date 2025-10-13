@@ -130,3 +130,68 @@ pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr
 		}
 	}
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+	use hyper::{Request, Body};
+
+	#[test]
+	fn test_extract_host_from_uri_authority() {
+		let req = Request::builder()
+			.uri("http://example.com/path")
+			.body(Body::empty())
+			.unwrap();
+
+		let host = extract_host(&req);
+		assert_eq!(host, Some("example.com".to_string()));
+	}
+
+	#[test]
+	fn test_extract_host_from_header() {
+		let req = Request::builder()
+			.uri("/path")
+			.header("Host", "api.example.com")
+			.body(Body::empty())
+			.unwrap();
+
+		let host = extract_host(&req);
+		assert_eq!(host, Some("api.example.com".to_string()));
+	}
+
+	#[test]
+	fn test_extract_host_from_header_with_port() {
+		let req = Request::builder()
+			.uri("/path")
+			.header("Host", "api.example.com:8080")
+			.body(Body::empty())
+			.unwrap();
+
+		let host = extract_host(&req);
+		assert_eq!(host, Some("api.example.com".to_string()));
+	}
+
+	#[test]
+	fn test_extract_host_priority_uri_over_header() {
+		let req = Request::builder()
+			.uri("http://uri.example.com/path")
+			.header("Host", "header.example.com")
+			.body(Body::empty())
+			.unwrap();
+
+		// URI authority takes precedence
+		let host = extract_host(&req);
+		assert_eq!(host, Some("uri.example.com".to_string()));
+	}
+
+	#[test]
+	fn test_extract_host_none() {
+		let req = Request::builder()
+			.uri("/path")
+			.body(Body::empty())
+			.unwrap();
+
+		let host = extract_host(&req);
+		assert_eq!(host, None);
+	}
+}

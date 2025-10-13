@@ -102,3 +102,175 @@ impl Config {
         valid.iter().any(|d| d == host)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::config::types::{Config, ProxyRoute};
+
+    #[test]
+    fn test_is_ssl_enabled_no_routes() {
+        let config = Config::default();
+        assert!(!config.is_ssl_enabled());
+    }
+
+    #[test]
+    fn test_is_ssl_enabled_with_ssl_route() {
+        let mut config = Config::default();
+        config.routes.insert(
+            "example.com".to_string(),
+            ProxyRoute::new(
+                "localhost".to_string(),
+                "/api".to_string(),
+                8080,
+                true, // SSL enabled
+                None,
+                false,
+            ),
+        );
+        assert!(config.is_ssl_enabled());
+    }
+
+    #[test]
+    fn test_is_ssl_enabled_without_ssl_route() {
+        let mut config = Config::default();
+        config.routes.insert(
+            "example.com".to_string(),
+            ProxyRoute::new(
+                "localhost".to_string(),
+                "/api".to_string(),
+                8080,
+                false, // SSL disabled
+                None,
+                false,
+            ),
+        );
+        assert!(!config.is_ssl_enabled());
+    }
+
+    #[test]
+    fn test_is_email_valid() {
+        let mut config = Config::default();
+
+        // Invalid emails
+        config.set_email("".to_string());
+        assert!(!config.is_email_valid());
+
+        config.set_email("invalid".to_string());
+        assert!(!config.is_email_valid());
+
+        config.set_email("test@".to_string());
+        assert!(!config.is_email_valid());
+
+        config.set_email("@example.com".to_string());
+        assert!(!config.is_email_valid());
+
+        config.set_email("test @example.com".to_string());
+        assert!(!config.is_email_valid());
+
+        config.set_email("test@invalid".to_string());
+        assert!(!config.is_email_valid());
+
+        // Valid emails
+        config.set_email("test@example.com".to_string());
+        assert!(config.is_email_valid());
+
+        config.set_email("admin@sub.example.com".to_string());
+        assert!(config.is_email_valid());
+
+        config.set_email("user.name+tag@example.co.uk".to_string());
+        assert!(config.is_email_valid());
+    }
+
+    #[test]
+    fn test_validate_domain_valid() {
+        assert!(Config::validate_domain("example.com"));
+        assert!(Config::validate_domain("sub.example.com"));
+        assert!(Config::validate_domain("api.v2.example.com"));
+        assert!(Config::validate_domain("test-123.example.com"));
+        assert!(Config::validate_domain("a.b.c.d.example.com"));
+    }
+
+    #[test]
+    fn test_validate_domain_invalid() {
+        // Wildcards not allowed for ACME
+        assert!(!Config::validate_domain("*.example.com"));
+
+        // No dot (must be FQDN-like)
+        assert!(!Config::validate_domain("localhost"));
+
+        // Ends with dot
+        assert!(!Config::validate_domain("example.com."));
+
+        // Empty
+        assert!(!Config::validate_domain(""));
+
+        // Too long label (>63 chars)
+        assert!(!Config::validate_domain(&format!("{}.com", "a".repeat(64))));
+
+        // Label starts/ends with dash
+        assert!(!Config::validate_domain("-example.com"));
+        assert!(!Config::validate_domain("example-.com"));
+
+        // Invalid characters
+        assert!(!Config::validate_domain("exam_ple.com"));
+        assert!(!Config::validate_domain("exam ple.com"));
+    }
+
+    #[test]
+    fn test_get_valid_domains_for_acme() {
+        let mut config = Config::default();
+        config.set_email("admin@example.com".to_string());
+
+        // Add valid SSL-enabled route
+        config.routes.insert(
+            "api.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false),
+        );
+
+        // Add wildcard route (should be invalid for ACME)
+        config.routes.insert(
+            "*.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false),
+        );
+
+        // Add non-SSL route (should be ignored)
+        config.routes.insert(
+            "nossl.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false),
+        );
+
+        // Add invalid domain
+        config.routes.insert(
+            "localhost".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false),
+        );
+
+        let (valid, invalid) = config.get_valid_domains_for_acme();
+
+        assert_eq!(valid.len(), 1);
+        assert!(valid.contains(&"api.example.com".to_string()));
+
+        assert_eq!(invalid.len(), 2);
+        assert!(invalid.contains(&"*.example.com".to_string()));
+        assert!(invalid.contains(&"localhost".to_string()));
+    }
+
+    #[test]
+    fn test_can_serve_tls_for_host() {
+        let mut config = Config::default();
+        config.set_email("admin@example.com".to_string());
+
+        // Add SSL-enabled route
+        config.routes.insert(
+            "api.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false),
+        );
+
+        assert!(config.can_serve_tls_for_host("api.example.com"));
+        assert!(!config.can_serve_tls_for_host("other.example.com"));
+
+        // Disable SSL
+        config.routes.get_mut("api.example.com").unwrap().ssl_enable = false;
+        assert!(!config.can_serve_tls_for_host("api.example.com"));
+    }
+}

@@ -344,3 +344,269 @@ fn default_path() -> String {
 fn default_port() -> u16 {
     0
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_config_new() {
+        let config = Config::new("./test_config.json");
+        assert_eq!(config.get_email(), "");
+        assert_eq!(config.get_cache_dir(), "./cache");
+        assert!(config.routes.is_empty());
+    }
+
+    #[test]
+    fn test_config_set_email() {
+        let mut config = Config::default();
+        config.set_email("test@example.com".to_string());
+        assert_eq!(config.get_email(), "test@example.com");
+    }
+
+    #[test]
+    fn test_lookup_host_exact_match() {
+        let mut config = Config::default();
+        config.routes.insert(
+            "api.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, false, None, false),
+        );
+
+        let route = config.lookup_host("api.example.com");
+        assert!(route.is_some());
+        assert_eq!(route.unwrap().get_host(), "localhost");
+        assert_eq!(route.unwrap().get_port(), 8080);
+    }
+
+    #[test]
+    fn test_lookup_host_wildcard_match() {
+        let mut config = Config::default();
+        config.routes.insert(
+            "*.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, false, None, false),
+        );
+
+        // Should match wildcard
+        let route = config.lookup_host("api.example.com");
+        assert!(route.is_some());
+        assert_eq!(route.unwrap().get_host(), "localhost");
+
+        let route2 = config.lookup_host("sub.example.com");
+        assert!(route2.is_some());
+
+        // Should not match
+        let route3 = config.lookup_host("example.com");
+        assert!(route3.is_none());
+
+        let route4 = config.lookup_host("example.org");
+        assert!(route4.is_none());
+    }
+
+    #[test]
+    fn test_lookup_host_exact_over_wildcard() {
+        let mut config = Config::default();
+        config.routes.insert(
+            "*.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/wildcard".to_string(), 8080, false, None, false),
+        );
+        config.routes.insert(
+            "api.example.com".to_string(),
+            ProxyRoute::new("localhost".to_string(), "/exact".to_string(), 9090, false, None, false),
+        );
+
+        // Exact match should take precedence
+        let route = config.lookup_host("api.example.com");
+        assert!(route.is_some());
+        assert_eq!(route.unwrap().get_path(), "/exact");
+        assert_eq!(route.unwrap().get_port(), 9090);
+    }
+
+    #[tokio::test]
+    async fn test_add_route_success() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        let result = config.add_route("api.example.com".to_string(), route).await;
+        assert!(result.is_ok());
+        assert!(config.routes.contains_key("api.example.com"));
+    }
+
+    #[tokio::test]
+    async fn test_add_route_duplicate() {
+        let mut config = Config::default();
+        let route1 = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route1).await.unwrap();
+
+        let route2 = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 9090, true, None, false);
+        let result = config.add_route("api.example.com".to_string(), route2).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[tokio::test]
+    async fn test_add_route_invalid_port() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 80, true, None, false);
+        let result = config.add_route("api.example.com".to_string(), route).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("reserved"));
+    }
+
+    #[tokio::test]
+    async fn test_add_route_trailing_slash() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api/".to_string(), 8080, true, None, false);
+        let result = config.add_route("api.example.com".to_string(), route).await;
+        assert!(result.is_ok());
+        let added_route = config.lookup_host("api.example.com").unwrap();
+        assert_eq!(added_route.get_path(), "/api");
+    }
+
+    #[tokio::test]
+    async fn test_remove_route() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        assert!(config.routes.contains_key("api.example.com"));
+        let result = config.remove_route("api.example.com").await;
+        assert!(result.is_ok());
+        assert!(!config.routes.contains_key("api.example.com"));
+    }
+
+    #[tokio::test]
+    async fn test_update_route_host() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let patch = RoutePatch {
+            host: Some("127.0.0.1".to_string()),
+            ..Default::default()
+        };
+        let result = config.update_route("api.example.com", patch).await;
+        assert!(result.is_ok());
+        assert_eq!(config.lookup_host("api.example.com").unwrap().get_host(), "127.0.0.1");
+    }
+
+    #[tokio::test]
+    async fn test_update_route_port() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let patch = RoutePatch {
+            port: Some(9090),
+            ..Default::default()
+        };
+        let result = config.update_route("api.example.com", patch).await;
+        assert!(result.is_ok());
+        assert_eq!(config.lookup_host("api.example.com").unwrap().get_port(), 9090);
+    }
+
+    #[tokio::test]
+    async fn test_update_route_invalid_port() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/api".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let patch = RoutePatch {
+            port: Some(443),
+            ..Default::default()
+        };
+        let result = config.update_route("api.example.com", patch).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_update_route_not_found() {
+        let mut config = Config::default();
+        let patch = RoutePatch {
+            host: Some("127.0.0.1".to_string()),
+            ..Default::default()
+        };
+        let result = config.update_route("nonexistent.example.com", patch).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not found"));
+    }
+
+    #[tokio::test]
+    async fn test_add_subroute_success() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let result = config.add_subroute("api.example.com", "/metrics".to_string(), 9090).await;
+        assert!(result.is_ok());
+
+        let route = config.lookup_host("api.example.com").unwrap();
+        assert_eq!(route.subroutes.len(), 1);
+        assert_eq!(route.subroutes[0].path, "/metrics");
+        assert_eq!(route.subroutes[0].port, 9090);
+    }
+
+    #[tokio::test]
+    async fn test_add_subroute_prepend_slash() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let result = config.add_subroute("api.example.com", "metrics".to_string(), 9090).await;
+        assert!(result.is_ok());
+
+        let route = config.lookup_host("api.example.com").unwrap();
+        assert_eq!(route.subroutes[0].path, "/metrics");
+    }
+
+    #[tokio::test]
+    async fn test_add_subroute_duplicate_path() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        config.add_subroute("api.example.com", "/metrics".to_string(), 9090).await.unwrap();
+        let result = config.add_subroute("api.example.com", "/metrics".to_string(), 9091).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("already exists"));
+    }
+
+    #[tokio::test]
+    async fn test_add_subroute_same_port_as_parent() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let result = config.add_subroute("api.example.com", "/metrics".to_string(), 8080).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("same as the parent"));
+    }
+
+    #[tokio::test]
+    async fn test_add_subroute_invalid_port() {
+        let mut config = Config::default();
+        let route = ProxyRoute::new("localhost".to_string(), "/".to_string(), 8080, true, None, false);
+        config.add_route("api.example.com".to_string(), route).await.unwrap();
+
+        let result = config.add_subroute("api.example.com", "/metrics".to_string(), 443).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("reserved"));
+    }
+
+    #[test]
+    fn test_proxy_route_getters() {
+        let route = ProxyRoute::new(
+            "localhost".to_string(),
+            "/api/v1".to_string(),
+            8080,
+            true,
+            Some(8443),
+            true,
+        );
+
+        assert_eq!(route.get_host(), "localhost");
+        assert_eq!(route.get_path(), "/api/v1");
+        assert_eq!(route.get_port(), 8080);
+        assert!(route.is_ssl_enabled());
+        assert_eq!(route.get_listen_port(), Some(8443));
+        assert!(route.get_redirect_to_https());
+    }
+}

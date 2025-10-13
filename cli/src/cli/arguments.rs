@@ -247,3 +247,142 @@ impl MinipxArguments {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proxy_route_args_to_proxy_route() {
+        let args = ProxyRouteArgs {
+            host: "localhost".to_string(),
+            path: "/api".to_string(),
+            port: 8080,
+            ssl_enable: true,
+            listen_port: Some(8443),
+            redirect_to_https: true,
+        };
+
+        let route: minipx::config::ProxyRoute = args.into();
+        assert_eq!(route.get_host(), "localhost");
+        assert_eq!(route.get_path(), "/api");
+        assert_eq!(route.get_port(), 8080);
+        assert!(route.is_ssl_enabled());
+        assert_eq!(route.get_listen_port(), Some(8443));
+        assert!(route.get_redirect_to_https());
+    }
+
+    #[test]
+    fn test_proxy_route_args_defaults() {
+        let args = ProxyRouteArgs {
+            host: "127.0.0.1".to_string(),
+            path: "".to_string(),
+            port: 3000,
+            ssl_enable: false,
+            listen_port: None,
+            redirect_to_https: false,
+        };
+
+        let route: minipx::config::ProxyRoute = args.into();
+        assert_eq!(route.get_host(), "127.0.0.1");
+        assert_eq!(route.get_path(), "");
+        assert_eq!(route.get_port(), 3000);
+        assert!(!route.is_ssl_enabled());
+        assert_eq!(route.get_listen_port(), None);
+        assert!(!route.get_redirect_to_https());
+    }
+
+    #[test]
+    fn test_update_route_options_to_route_patch_all_fields() {
+        let options = UpdateRouteOptions {
+            host: Some("127.0.0.1".to_string()),
+            path: Some("/api/v2".to_string()),
+            port: Some(9090),
+            ssl: true,
+            no_ssl: false,
+            redirect: true,
+            no_redirect: false,
+        };
+
+        let patch: RoutePatch = options.into();
+        assert_eq!(patch.host, Some("127.0.0.1".to_string()));
+        assert_eq!(patch.path, Some("/api/v2".to_string()));
+        assert_eq!(patch.port, Some(9090));
+        assert_eq!(patch.ssl_enable, Some(true));
+        assert_eq!(patch.redirect_to_https, Some(true));
+    }
+
+    #[test]
+    fn test_update_route_options_to_route_patch_ssl_disable() {
+        let options = UpdateRouteOptions {
+            host: None,
+            path: None,
+            port: None,
+            ssl: false,
+            no_ssl: true,
+            redirect: false,
+            no_redirect: false,
+        };
+
+        let patch: RoutePatch = options.into();
+        assert_eq!(patch.host, None);
+        assert_eq!(patch.ssl_enable, Some(false));
+    }
+
+    #[test]
+    fn test_update_route_options_to_route_patch_redirect_disable() {
+        let options = UpdateRouteOptions {
+            host: None,
+            path: None,
+            port: None,
+            ssl: false,
+            no_ssl: false,
+            redirect: false,
+            no_redirect: true,
+        };
+
+        let patch: RoutePatch = options.into();
+        assert_eq!(patch.redirect_to_https, Some(false));
+    }
+
+    #[test]
+    fn test_update_route_options_to_route_patch_no_changes() {
+        let options = UpdateRouteOptions {
+            host: None,
+            path: None,
+            port: None,
+            ssl: false,
+            no_ssl: false,
+            redirect: false,
+            no_redirect: false,
+        };
+
+        let patch: RoutePatch = options.into();
+        assert_eq!(patch.host, None);
+        assert_eq!(patch.path, None);
+        assert_eq!(patch.port, None);
+        assert_eq!(patch.ssl_enable, None);
+        assert_eq!(patch.redirect_to_https, None);
+        assert_eq!(patch.listen_port, None);
+    }
+
+    #[test]
+    fn test_update_route_options_to_route_patch_partial() {
+        let options = UpdateRouteOptions {
+            host: Some("192.168.1.1".to_string()),
+            path: None,
+            port: Some(5000),
+            ssl: false,
+            no_ssl: false,
+            redirect: false,
+            no_redirect: false,
+        };
+
+        let patch: RoutePatch = options.into();
+        assert_eq!(patch.host, Some("192.168.1.1".to_string()));
+        assert_eq!(patch.path, None);
+        assert_eq!(patch.port, Some(5000));
+        assert_eq!(patch.ssl_enable, None);
+        assert_eq!(patch.redirect_to_https, None);
+    }
+}
