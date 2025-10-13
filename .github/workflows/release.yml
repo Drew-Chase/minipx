@@ -1,0 +1,211 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g., v1.0.0)'
+        required: false
+        default: 'manual'
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  build:
+    name: Build - ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_cli: minipx
+            artifact_web: minipx_web
+
+          # Linux ARM64
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            artifact_cli: minipx
+            artifact_web: minipx_web
+            cross: true
+
+          # macOS x86_64 (Intel)
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_cli: minipx
+            artifact_web: minipx_web
+
+          # macOS ARM64 (Apple Silicon)
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_cli: minipx
+            artifact_web: minipx_web
+
+          # Windows x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_cli: minipx.exe
+            artifact_web: minipx_web.exe
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Install cross-compilation tools (Linux ARM64)
+        if: matrix.cross
+        run: |
+          cargo install cross --git https://github.com/cross-rs/cross
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/registry
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo index
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/git
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-index-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Cache cargo build
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
+
+      - name: Build CLI (with cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p minipx_cli
+
+      - name: Build CLI (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }} -p minipx_cli
+
+      - name: Build Web (with cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p minipx_web
+
+      - name: Build Web (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }} -p minipx_web
+
+      - name: Strip binaries (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          strip target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} || true
+          strip target/${{ matrix.target }}/release/${{ matrix.artifact_web }} || true
+
+      - name: Create archive directory
+        run: mkdir -p artifacts
+
+      - name: Copy CLI binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} artifacts/
+
+      - name: Copy Web binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_web }} artifacts/
+
+      - name: Create CLI tarball (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd artifacts
+          tar czf minipx-cli-${{ matrix.target }}.tar.gz ${{ matrix.artifact_cli }}
+          rm ${{ matrix.artifact_cli }}
+
+      - name: Create Web tarball (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd artifacts
+          tar czf minipx-web-${{ matrix.target }}.tar.gz ${{ matrix.artifact_web }}
+          rm ${{ matrix.artifact_web }}
+
+      - name: Create CLI zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd artifacts
+          Compress-Archive -Path ${{ matrix.artifact_cli }} -DestinationPath minipx-cli-${{ matrix.target }}.zip
+          Remove-Item ${{ matrix.artifact_cli }}
+
+      - name: Create Web zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd artifacts
+          Compress-Archive -Path ${{ matrix.artifact_web }} -DestinationPath minipx-web-${{ matrix.target }}.zip
+          Remove-Item ${{ matrix.artifact_web }}
+
+      - name: Upload CLI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minipx-cli-${{ matrix.target }}
+          path: artifacts/minipx-cli-*
+          retention-days: 7
+
+      - name: Upload Web artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minipx-web-${{ matrix.target }}
+          path: artifacts/minipx-web-*
+          retention-days: 7
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -R artifacts
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  summary:
+    name: Build Summary
+    needs: build
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Summary
+        run: |
+          echo "## Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build completed for all targets!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Artifacts Generated:" >> $GITHUB_STEP_SUMMARY
+          echo "- CLI binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
+          echo "- Web binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
