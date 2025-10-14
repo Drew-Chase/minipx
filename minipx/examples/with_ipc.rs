@@ -37,24 +37,24 @@ async fn main() -> Result<()> {
     config.watch_config_file();
 
     println!("\n╔════════════════════════════════════════════════════════════╗");
-    println!("║              MINIPX WITH IPC SUPPORT                      ║");
+    println!("║              MINIPX WITH IPC SUPPORT                       ║");
     println!("╠════════════════════════════════════════════════════════════╣");
     println!("║                                                            ║");
-    println!("║  The proxy is running with IPC server enabled             ║");
+    println!("║  The proxy is running with IPC server enabled              ║");
     println!("║                                                            ║");
-    println!("║  You can now use CLI commands without specifying config:  ║");
+    println!("║  You can now use CLI commands without specifying config:   ║");
     println!("║                                                            ║");
-    println!("║    minipx routes list                                     ║");
-    println!("║    minipx routes add example.com --port 8080              ║");
-    println!("║    minipx routes show example.com                         ║");
-    println!("║    minipx config show                                     ║");
+    println!("║    minipx routes list                                      ║");
+    println!("║    minipx routes add example.com --port 8080               ║");
+    println!("║    minipx routes show example.com                          ║");
+    println!("║    minipx config show                                      ║");
     println!("║                                                            ║");
-    println!("║  The CLI will automatically use the config from this      ║");
-    println!("║  running instance via IPC.                                ║");
+    println!("║  The CLI will automatically use the config from this       ║");
+    println!("║  running instance via IPC.                                 ║");
     println!("║                                                            ║");
-    println!("║  Config file: {}            ║", config_path);
+    println!("║  Config file: {}{}║", config_path, " ".repeat(45 - config_path.len()));
     println!("║                                                            ║");
-    println!("║  Press Ctrl+C to stop                                     ║");
+    println!("║  Press Ctrl+C to stop                                      ║");
     println!("║                                                            ║");
     println!("╚════════════════════════════════════════════════════════════╝\n");
 
