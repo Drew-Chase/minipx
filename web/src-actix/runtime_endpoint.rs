@@ -65,7 +65,7 @@ async fn scan_archive(body: web::Json<ScanArchiveRequest>) -> ActixResult<HttpRe
 }
 
 fn is_executable_file(filename: &str) -> bool {
-    let executable_extensions = vec![".exe", ".jar", ".dll", ".so", ".dylib", ".sh", ".bat", ".cmd", ".ps1"];
+    let executable_extensions = [".exe", ".jar", ".dll", ".so", ".dylib", ".sh", ".bat", ".cmd", ".ps1"];
     executable_extensions.iter().any(|ext| filename.to_lowercase().ends_with(ext))
 }
 
