@@ -1,9 +1,9 @@
+use crate::models::Runtime;
 use anyhow::Result;
+use chrono::Utc;
 use log::*;
 use std::process::Command;
 use uuid::Uuid;
-use chrono::Utc;
-use crate::models::Runtime;
 
 /// Detects all available runtimes on the system
 pub fn detect_runtimes() -> Result<Vec<Runtime>> {
@@ -134,11 +134,7 @@ fn detect_nodejs() -> Option<Runtime> {
 
 fn detect_python() -> Option<Runtime> {
     // Try python3 first, then python
-    let python_cmd = if Command::new("python3").arg("--version").output().is_ok() {
-        "python3"
-    } else {
-        "python"
-    };
+    let python_cmd = if Command::new("python3").arg("--version").output().is_ok() { "python3" } else { "python" };
 
     let output = if cfg!(target_os = "windows") {
         Command::new("cmd").args(["/C", "where", python_cmd]).output().ok()?

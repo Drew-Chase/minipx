@@ -1,4 +1,4 @@
-import { Server, Certificate, ResourceMetric, SystemStats, Runtime, ArchiveFile } from '../types';
+import { Server, Certificate, ResourceMetric, SystemStats, Runtime } from '../types';
 
 const API_BASE = '/api';
 

@@ -1,4 +1,4 @@
-use actix_web::{get, post, web, HttpResponse, Result as ActixResult};
+use actix_web::{HttpResponse, Result as ActixResult, get, post, web};
 use log::*;
 use sqlx::SqlitePool;
 
@@ -7,12 +7,7 @@ use crate::models::Runtime;
 use crate::runtime_detector;
 
 pub fn configure(cfg: &mut web::ServiceConfig) {
-    cfg.service(
-        web::scope("/runtimes")
-            .service(list_runtimes)
-            .service(detect_and_store_runtimes)
-            .service(scan_archive),
-    );
+    cfg.service(web::scope("/runtimes").service(list_runtimes).service(detect_and_store_runtimes).service(scan_archive));
 }
 
 #[get("")]
@@ -28,10 +23,7 @@ async fn list_runtimes(pool: web::Data<SqlitePool>) -> ActixResult<HttpResponse>
 #[post("/detect")]
 async fn detect_and_store_runtimes(pool: web::Data<SqlitePool>) -> ActixResult<HttpResponse> {
     // Clear existing runtimes
-    sqlx::query("DELETE FROM runtimes")
-        .execute(pool.get_ref())
-        .await
-        .map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
+    sqlx::query("DELETE FROM runtimes").execute(pool.get_ref()).await.map_err(|e| Error::from(anyhow::anyhow!("Database error: {}", e)))?;
 
     // Detect runtimes
     let runtimes = runtime_detector::detect_runtimes().map_err(|e| Error::from(anyhow::anyhow!("Runtime detection error: {}", e)))?;
@@ -65,12 +57,7 @@ async fn scan_archive(body: web::Json<ScanArchiveRequest>) -> ActixResult<HttpRe
     // For now, we'll return a placeholder response
     info!("Received archive scan request for {} files", body.files.len());
 
-    let executables: Vec<String> = body
-        .files
-        .iter()
-        .filter(|f| is_executable_file(f))
-        .cloned()
-        .collect();
+    let executables: Vec<String> = body.files.iter().filter(|f| is_executable_file(f)).cloned().collect();
 
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "executables": executables
