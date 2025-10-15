@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 pub(crate) use actix_web::error::HttpError;
 use actix_web::http::StatusCode;
 use actix_web::http::header::ToStrError;
