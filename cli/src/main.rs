@@ -3,16 +3,19 @@ mod cli;
 use crate::cli::MinipxArguments;
 use anyhow::Result;
 use clap::Parser;
-use log::{LevelFilter, info, trace};
+use log::{info, trace, LevelFilter};
 use minipx::{config::Config, ipc, proxy, ssl_server};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = MinipxArguments::parse();
-    pretty_env_logger::env_logger::builder()
+
+    // Initialize logging - Ignore any errors here,
+    // as we don't want to fail if we can't initialize logging
+    let _ = pretty_env_logger::env_logger::builder()
         .format_timestamp(None)
         .filter_level(if args.verbose { LevelFilter::Trace } else { LevelFilter::Info })
-        .init();
+        .try_init();
 
     // Handle command line arguments
     args.handle_arguments().await?;
