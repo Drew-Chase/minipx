@@ -31,6 +31,7 @@ pub fn spawn_system_stats_refresher() -> broadcast::Sender<SystemStatsCache> {
 
     tokio::spawn(async move {
         let mut sys = System::new_all();
+        let mut networks = Networks::new_with_refreshed_list();
         let mut interval = tokio::time::interval(Duration::from_secs(2));
 
         loop {
@@ -38,8 +39,8 @@ pub fn spawn_system_stats_refresher() -> broadcast::Sender<SystemStatsCache> {
 
             // Refresh all system information
             sys.refresh_all();
+            networks.refresh(true);
             let disks = Disks::new_with_refreshed_list();
-            let networks = Networks::new_with_refreshed_list();
 
             let total_memory = sys.total_memory();
             let used_memory = sys.used_memory();
