@@ -67,6 +67,9 @@ jobs:
         if: matrix.cross
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
+        env:
+          OPENSSL_STATIC: 1
+          OPENSSL_NO_VENDOR: 0
 
       - name: Cache cargo registry
         uses: actions/cache@v4
@@ -89,6 +92,9 @@ jobs:
       - name: Build CLI only (with cross)
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p minipx_cli
+        env:
+          OPENSSL_STATIC: 1
+          OPENSSL_NO_VENDOR: 0
 
       - name: Build CLI only (native)
         if: ${{ !matrix.cross }}
@@ -97,6 +103,9 @@ jobs:
       - name: Build CLI with WebUI (with cross)
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p minipx_cli --features webui
+        env:
+          OPENSSL_STATIC: 1
+          OPENSSL_NO_VENDOR: 0
 
       - name: Build CLI with WebUI (native)
         if: ${{ !matrix.cross }}
@@ -105,6 +114,9 @@ jobs:
       - name: Build Web only (with cross)
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p minipx_web
+        env:
+          OPENSSL_STATIC: 1
+          OPENSSL_NO_VENDOR: 0
 
       - name: Build Web only (native)
         if: ${{ !matrix.cross }}
