@@ -14,6 +14,9 @@ pub struct Server {
     pub listen_port: Option<i64>,
     pub status: String,
     pub binary_path: String,
+    pub startup_command: Option<String>,
+    pub runtime_id: Option<String>,
+    pub main_executable: Option<String>,
     pub created_at: String,
     pub updated_at: String,
 }
@@ -28,6 +31,9 @@ pub struct CreateServerRequest {
     pub ssl_enabled: Option<bool>,
     pub redirect_to_https: Option<bool>,
     pub listen_port: Option<u16>,
+    pub startup_command: Option<String>,
+    pub runtime_id: Option<String>,
+    pub main_executable: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -41,6 +47,9 @@ pub struct UpdateServerRequest {
     pub redirect_to_https: Option<bool>,
     pub listen_port: Option<u16>,
     pub status: Option<String>,
+    pub startup_command: Option<String>,
+    pub runtime_id: Option<String>,
+    pub main_executable: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
@@ -86,4 +95,16 @@ pub struct SystemStats {
     pub disk_used: u64,
     pub network_in: f64,
     pub network_out: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, FromRow)]
+pub struct Runtime {
+    pub id: String,
+    pub name: String,
+    pub display_name: String,
+    pub version: String,
+    pub executable_path: String,
+    pub runtime_type: String,
+    pub detected_at: String,
+    pub is_available: bool,
 }

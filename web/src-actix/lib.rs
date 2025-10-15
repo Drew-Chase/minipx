@@ -13,6 +13,8 @@ mod db;
 mod http_error;
 mod metrics_endpoint;
 mod models;
+mod runtime_detector;
+mod runtime_endpoint;
 mod server_endpoint;
 mod test_endpoint;
 
@@ -78,7 +80,8 @@ pub async fn run() -> Result<()> {
                     .configure(test_endpoint::configure)
                     .configure(server_endpoint::configure)
                     .configure(certificate_endpoint::configure)
-                    .configure(metrics_endpoint::configure),
+                    .configure(metrics_endpoint::configure)
+                    .configure(runtime_endpoint::configure),
             )
             .configure_frontend_routes()
     })

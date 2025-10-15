@@ -1,4 +1,4 @@
-import { Server, Certificate, ResourceMetric, SystemStats } from '../types';
+import { Server, Certificate, ResourceMetric, SystemStats, Runtime, ArchiveFile } from '../types';
 
 const API_BASE = '/api';
 
@@ -100,4 +100,16 @@ export const metricsAPI = {
   getSystemStats: () => fetchAPI<SystemStats>('/metrics/system'),
   getServerMetrics: (serverId: string) => fetchAPI<ResourceMetric>(`/metrics/server/${serverId}`),
   getServerMetricsHistory: (serverId: string) => fetchAPI<ResourceMetric[]>(`/metrics/server/${serverId}/history`),
+};
+
+// Runtime API
+export const runtimeAPI = {
+  list: () => fetchAPI<Runtime[]>('/runtimes'),
+  detect: () => fetchAPI<Runtime[]>('/runtimes/detect', {
+    method: 'POST',
+  }),
+  scanArchive: (files: string[]) => fetchAPI<{ executables: string[] }>('/runtimes/scan-archive', {
+    method: 'POST',
+    body: JSON.stringify({ files }),
+  }),
 };

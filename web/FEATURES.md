@@ -53,17 +53,64 @@
 - **Hover Effects**: Scale-up animation on hover
 - **Delete Confirmation**: Safety prompt before deletion
 
-#### Binary/Archive Upload
-- **Drag & Drop**: Easy file selection
+#### Binary/Archive Upload (Enhanced)
+- **Drag & Drop**: Easy file selection with react-dropzone
 - **Multiple Formats**:
   - Executables (any binary)
-  - ZIP archives
+  - ZIP archives (client-side extraction with fflate)
+  - 7z archives
   - TAR archives
   - GZ/TGZ compressed archives
-- **Auto-Extraction**: Archives automatically unzipped/untarred
+- **Client-Side ZIP Extraction**: Fast, no server processing required
+  - Archive contents preview
+  - Executable file detection
+  - File size display
+  - Path preservation
 - **Large File Support**: Up to 512 MB
-- **Progress Feedback**: Visual confirmation of uploads
+- **Progress Feedback**: Visual confirmation of uploads with spinner
 - **Server Directory**: Each server gets isolated directory
+
+#### Runtime Detection & Management (New)
+- **Cross-Platform Detection**: Automatically finds installed runtimes
+  - **Java**: JRE/JDK with version detection
+  - **.NET**: .NET Core/Framework
+  - **Node.js**: Node runtime
+  - **Python**: Python 2/3
+  - **Go**: Go compiler
+- **System Path Scanning**: Uses `which`/`where` commands
+- **Version Information**: Displays exact versions
+- **Database Storage**: Persistent runtime cache
+- **Manual Re-scan**: Detect newly installed runtimes
+- **Runtime Selection**: Choose runtime for each server
+
+#### Intelligent Executable Selection (New)
+- **Auto-Detection**: Identifies executable files in archives
+- **Smart Suggestions**: Recommends main file based on runtime
+  - Java: Finds `.jar` files
+  - .NET: Finds `.dll` files (excluding lib folders)
+  - Node.js: Looks for `index.js`, `main.js`, `app.js`, `server.js`
+  - Python: Looks for `main.py`, `app.py`, `__main__.py`
+  - Binary: Finds `.exe` files
+- **Manual Override**: Select any executable from dropdown
+- **Archive Browser**: Preview all files in uploaded archive
+- **Extension Filtering**: Shows only relevant files
+
+#### Startup Command Templates (New)
+- **Pre-Built Templates**: Ready-to-use commands for each runtime
+  - **Java**: `-Xmx{MEMORY}G -jar {JAR_FILE}`
+  - **.NET**: `dotnet {DLL_FILE}`
+  - **Node.js**: `NODE_ENV={ENV} node {MAIN_FILE}`
+  - **Python**: `python {MAIN_FILE}`
+  - **Binary**: `./{BINARY_FILE} {ARGS}`
+- **Variable System**: Template placeholders auto-populated
+  - Memory allocation (default: 4GB)
+  - Minimum memory (default: 1GB)
+  - Environment (default: production)
+  - File paths from archive
+- **Live Preview**: Command updates as you type
+- **Variable Inputs**: Dedicated fields for each variable
+- **Custom Commands**: Manual command entry supported
+- **Template Selection**: Dropdown with multiple variants per runtime
 
 #### Server Controls
 - **Start**: Launch a stopped server
@@ -226,6 +273,14 @@
 - **Iconify**: 150,000+ icons
 - **Tailwind**: Utility-first CSS
 - **Framer Motion**: Animation library
+- **react-dropzone**: Drag-and-drop file uploads
+- **fflate**: Client-side ZIP extraction
+
+#### Backend Dependencies
+- **regex**: Pattern matching for version extraction
+- **sysinfo**: System metrics collection
+- **sqlx**: Type-safe SQL queries
+- **actix-multipart**: File upload handling
 
 #### Dev Tools
 - **Hot Module Replacement**: Instant updates
@@ -237,7 +292,7 @@
 
 ### Creating a Server
 ```typescript
-// Via API
+// Basic server creation
 await serverAPI.create({
   name: "My API",
   domain: "api.example.com",
@@ -245,6 +300,17 @@ await serverAPI.create({
   port: 8080,
   ssl_enabled: true,
   redirect_to_https: true
+});
+
+// Server with runtime and startup command
+await serverAPI.create({
+  name: "Java Application",
+  domain: "java.example.com",
+  host: "localhost",
+  port: 8080,
+  runtime_id: "java-runtime-id",
+  main_executable: "myapp.jar",
+  startup_command: "java -Xmx4G -jar myapp.jar"
 });
 ```
 
@@ -287,6 +353,59 @@ const metrics = await metricsAPI.getServerMetrics(serverId);
 
 // Historical data
 const history = await metricsAPI.getServerMetricsHistory(serverId);
+```
+
+### Runtime Detection (New)
+```typescript
+// List all detected runtimes
+const runtimes = await runtimeAPI.list();
+
+// Detect and store runtimes
+const detected = await runtimeAPI.detect();
+
+// Scan archive for executables
+const result = await runtimeAPI.scanArchive(['file1.jar', 'file2.exe']);
+console.log(result.executables); // ['file1.jar', 'file2.exe']
+```
+
+### Archive Extraction (New)
+```typescript
+import { extractZipArchive, getExecutableFiles } from '@/utils/zipExtractor';
+
+// Extract ZIP archive
+const files = await extractZipArchive(zipFile);
+
+// Get only executable files
+const executables = getExecutableFiles(files);
+
+// Filter by extension
+const jarFiles = files.filter(f => f.name.endsWith('.jar'));
+```
+
+### Startup Templates (New)
+```typescript
+import {
+  getTemplatesForRuntime,
+  fillTemplate,
+  suggestMainFile
+} from '@/utils/startupTemplates';
+
+// Get templates for Java
+const templates = getTemplatesForRuntime('java');
+
+// Fill template with variables
+const command = fillTemplate(
+  'java -Xmx{MEMORY}G -jar {JAR_FILE}',
+  { MEMORY: '4', JAR_FILE: 'app.jar' }
+);
+// Result: "java -Xmx4G -jar app.jar"
+
+// Auto-suggest main file
+const suggested = suggestMainFile(
+  ['lib/helper.jar', 'app.jar', 'config.json'],
+  'java'
+);
+// Result: "app.jar"
 ```
 
 ## Future Enhancements

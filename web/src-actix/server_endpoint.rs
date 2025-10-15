@@ -65,8 +65,8 @@ async fn create_server(pool: web::Data<SqlitePool>, req: web::Json<CreateServerR
     let binary_path = servers_dir.to_str().unwrap().to_string();
 
     sqlx::query(
-        "INSERT INTO servers (id, name, domain, host, port, path, ssl_enabled, redirect_to_https, listen_port, status, binary_path, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        "INSERT INTO servers (id, name, domain, host, port, path, ssl_enabled, redirect_to_https, listen_port, status, binary_path, startup_command, runtime_id, main_executable, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     )
     .bind(&id)
     .bind(&req.name)
@@ -79,6 +79,9 @@ async fn create_server(pool: web::Data<SqlitePool>, req: web::Json<CreateServerR
     .bind(req.listen_port.map(|p| p as i64))
     .bind("stopped")
     .bind(&binary_path)
+    .bind(&req.startup_command)
+    .bind(&req.runtime_id)
+    .bind(&req.main_executable)
     .bind(&now)
     .bind(&now)
     .execute(pool.get_ref())
@@ -126,10 +129,14 @@ async fn update_server(pool: web::Data<SqlitePool>, id: web::Path<String>, req: 
     let redirect_to_https = req.redirect_to_https.unwrap_or(existing.redirect_to_https);
     let listen_port = req.listen_port.map(|p| Some(p as i64)).unwrap_or(existing.listen_port);
     let status = req.status.clone().unwrap_or(existing.status);
+    let startup_command = req.startup_command.clone().or(existing.startup_command);
+    let runtime_id = req.runtime_id.clone().or(existing.runtime_id);
+    let main_executable = req.main_executable.clone().or(existing.main_executable);
 
     sqlx::query(
         "UPDATE servers SET name = ?, domain = ?, host = ?, port = ?, path = ?,
-         ssl_enabled = ?, redirect_to_https = ?, listen_port = ?, status = ?, updated_at = ?
+         ssl_enabled = ?, redirect_to_https = ?, listen_port = ?, status = ?,
+         startup_command = ?, runtime_id = ?, main_executable = ?, updated_at = ?
          WHERE id = ?",
     )
     .bind(&name)
@@ -141,6 +148,9 @@ async fn update_server(pool: web::Data<SqlitePool>, id: web::Path<String>, req: 
     .bind(redirect_to_https)
     .bind(listen_port)
     .bind(&status)
+    .bind(&startup_command)
+    .bind(&runtime_id)
+    .bind(&main_executable)
     .bind(&now)
     .bind(id.as_str())
     .execute(pool.get_ref())

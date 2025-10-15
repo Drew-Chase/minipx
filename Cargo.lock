@@ -2134,6 +2134,7 @@ dependencies = [
  "log",
  "minipx",
  "pretty_env_logger",
+ "regex",
  "serde",
  "serde_hash",
  "serde_json",

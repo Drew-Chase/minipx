@@ -15,6 +15,7 @@ pub async fn init_database() -> Result<SqlitePool> {
 
     // Run migrations
     sqlx::query(include_str!("../migrations/001_initial_schema.sql")).execute(&pool).await?;
+    sqlx::query(include_str!("../migrations/002_add_runtimes_and_startup_commands.sql")).execute(&pool).await?;
 
     Ok(pool)
 }
