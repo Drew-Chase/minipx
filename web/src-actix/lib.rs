@@ -1,5 +1,5 @@
 use crate::asset_endpoint::AssetsAppConfig;
-use actix_web::{middleware, web, App, HttpResponse, HttpServer};
+use actix_web::{App, HttpResponse, HttpServer, middleware, web};
 use anyhow::Result;
 use log::*;
 use serde_json::json;
@@ -22,7 +22,6 @@ pub static DEBUG: bool = cfg!(debug_assertions);
 const PORT: u16 = 6671;
 
 pub async fn run() -> Result<()> {
-
     // Initialize logging - Ignore any errors here,
     // as we don't want to fail if we can't initialize logging
     let _ = pretty_env_logger::env_logger::builder()

@@ -3,7 +3,7 @@ mod cli;
 use crate::cli::MinipxArguments;
 use anyhow::Result;
 use clap::Parser;
-use log::{info, trace, LevelFilter};
+use log::{LevelFilter, info, trace};
 use minipx::{config::Config, ipc, proxy, ssl_server};
 
 #[tokio::main]
