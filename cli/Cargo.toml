@@ -17,3 +17,7 @@ anyhow = "1.0.99"
 clap = { version = "4", features = ["derive", "color", "help", "suggestions", "wrap_help", "error-context", "usage", "string", "unicode"] }
 log = "0.4.27"
 pretty_env_logger = { version = "0.5.0" }
+minipx_web = { path = "../web", optional = true }
+
+[features]
+webui = ["dep:minipx_web"]

@@ -29,6 +29,10 @@ async fn main() -> Result<()> {
     ipc::start_ipc_server(std::path::PathBuf::from(&effective_config_path));
 
     // Run HTTP and HTTPS servers concurrently
+    #[cfg(feature = "webui")]
+    tokio::try_join!(proxy::start_rp_server(), ssl_server::start_ssl_server(), minipx_web_lib::run())?;
+
+    #[cfg(not(feature = "webui"))]
     tokio::try_join!(proxy::start_rp_server(), ssl_server::start_ssl_server())?;
 
     Ok(())

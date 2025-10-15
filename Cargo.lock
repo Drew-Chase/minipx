@@ -2116,6 +2116,7 @@ dependencies = [
  "clap",
  "log",
  "minipx",
+ "minipx_web",
  "pretty_env_logger",
  "tokio",
 ]
