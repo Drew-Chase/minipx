@@ -86,79 +86,121 @@ jobs:
           path: target
           key: ${{ runner.os }}-${{ matrix.target }}-cargo-build-target-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Build CLI (with cross)
+      - name: Build CLI only (with cross)
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p minipx_cli
 
-      - name: Build CLI (native)
+      - name: Build CLI only (native)
         if: ${{ !matrix.cross }}
         run: cargo build --release --target ${{ matrix.target }} -p minipx_cli
 
-      - name: Build Web (with cross)
+      - name: Build CLI with WebUI (with cross)
+        if: matrix.cross
+        run: cross build --release --target ${{ matrix.target }} -p minipx_cli --features webui
+
+      - name: Build CLI with WebUI (native)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release --target ${{ matrix.target }} -p minipx_cli --features webui
+
+      - name: Build Web only (with cross)
         if: matrix.cross
         run: cross build --release --target ${{ matrix.target }} -p minipx_web
 
-      - name: Build Web (native)
+      - name: Build Web only (native)
         if: ${{ !matrix.cross }}
         run: cargo build --release --target ${{ matrix.target }} -p minipx_web
-
-      - name: Strip binaries (Linux/macOS)
-        if: runner.os != 'Windows'
-        run: |
-          strip target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} || true
-          strip target/${{ matrix.target }}/release/${{ matrix.artifact_web }} || true
 
       - name: Create archive directory
         run: mkdir -p artifacts
 
-      - name: Copy CLI binary
+      - name: Copy and prepare CLI-only binary
         shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} artifacts/
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} artifacts/minipx-cli-only${{ runner.os == 'Windows' && '.exe' || '' }}
 
-      - name: Copy Web binary
+      - name: Strip CLI-only binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: strip artifacts/minipx-cli-only || true
+
+      - name: Copy and prepare CLI with WebUI binary
         shell: bash
         run: |
-          cp target/${{ matrix.target }}/release/${{ matrix.artifact_web }} artifacts/
+          # The webui build overwrites the same binary, so we need to get it from target again
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_cli }} artifacts/minipx-cli-webui${{ runner.os == 'Windows' && '.exe' || '' }}
 
-      - name: Create CLI tarball (Unix)
+      - name: Strip CLI with WebUI binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: strip artifacts/minipx-cli-webui || true
+
+      - name: Copy and prepare Web-only binary
+        shell: bash
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_web }} artifacts/minipx-web${{ runner.os == 'Windows' && '.exe' || '' }}
+
+      - name: Strip Web-only binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: strip artifacts/minipx-web || true
+
+      - name: Create CLI-only tarball (Unix)
         if: runner.os != 'Windows'
         run: |
           cd artifacts
-          tar czf minipx-cli-${{ matrix.target }}.tar.gz ${{ matrix.artifact_cli }}
-          rm ${{ matrix.artifact_cli }}
+          tar czf minipx-cli-only-${{ matrix.target }}.tar.gz minipx-cli-only
+          rm minipx-cli-only
 
-      - name: Create Web tarball (Unix)
+      - name: Create CLI with WebUI tarball (Unix)
         if: runner.os != 'Windows'
         run: |
           cd artifacts
-          tar czf minipx-web-${{ matrix.target }}.tar.gz ${{ matrix.artifact_web }}
-          rm ${{ matrix.artifact_web }}
+          tar czf minipx-cli-webui-${{ matrix.target }}.tar.gz minipx-cli-webui
+          rm minipx-cli-webui
 
-      - name: Create CLI zip (Windows)
+      - name: Create Web-only tarball (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd artifacts
+          tar czf minipx-web-${{ matrix.target }}.tar.gz minipx-web
+          rm minipx-web
+
+      - name: Create CLI-only zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cd artifacts
-          Compress-Archive -Path ${{ matrix.artifact_cli }} -DestinationPath minipx-cli-${{ matrix.target }}.zip
-          Remove-Item ${{ matrix.artifact_cli }}
+          Compress-Archive -Path minipx-cli-only.exe -DestinationPath minipx-cli-only-${{ matrix.target }}.zip
+          Remove-Item minipx-cli-only.exe
 
-      - name: Create Web zip (Windows)
+      - name: Create CLI with WebUI zip (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           cd artifacts
-          Compress-Archive -Path ${{ matrix.artifact_web }} -DestinationPath minipx-web-${{ matrix.target }}.zip
-          Remove-Item ${{ matrix.artifact_web }}
+          Compress-Archive -Path minipx-cli-webui.exe -DestinationPath minipx-cli-webui-${{ matrix.target }}.zip
+          Remove-Item minipx-cli-webui.exe
 
-      - name: Upload CLI artifacts
+      - name: Create Web-only zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cd artifacts
+          Compress-Archive -Path minipx-web.exe -DestinationPath minipx-web-${{ matrix.target }}.zip
+          Remove-Item minipx-web.exe
+
+      - name: Upload CLI-only artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: minipx-cli-${{ matrix.target }}
-          path: artifacts/minipx-cli-*
+          name: minipx-cli-only-${{ matrix.target }}
+          path: artifacts/minipx-cli-only-*
           retention-days: 7
 
-      - name: Upload Web artifacts
+      - name: Upload CLI with WebUI artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: minipx-cli-webui-${{ matrix.target }}
+          path: artifacts/minipx-cli-webui-*
+          retention-days: 7
+
+      - name: Upload Web-only artifacts
         uses: actions/upload-artifact@v4
         with:
           name: minipx-web-${{ matrix.target }}
@@ -207,5 +249,8 @@ jobs:
           echo "Build completed for all targets!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Artifacts Generated:" >> $GITHUB_STEP_SUMMARY
-          echo "- CLI binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
-          echo "- Web binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
+          echo "- **CLI-only** binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
+          echo "- **CLI with WebUI** binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web-only** binaries for Linux (x64, ARM64), macOS (Intel, Apple Silicon), Windows (x64)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Total: 15 artifacts (3 variants × 5 platforms)" >> $GITHUB_STEP_SUMMARY
