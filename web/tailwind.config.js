@@ -95,6 +95,30 @@ export default {
                     danger: "#f87171",
                     background: "#0f172a",
                     foreground: "#f1f5f9",
+                    content1: "#1e293b",
+                    content2: "#2d3748",
+                    content3: "#475569",
+                    content4: "#64748b",
+                    content5: "#818cf8",
+                    content6: "#a5b4fc",
+                    content7: "#c7d2fe",
+                    content8: "#e0e7ff",
+                    content9: "#f1f5f9",
+                    content10: "#f8fafc",
+                    content11: "#f8fafc",
+                    default: {
+                        DEFAULT: "#41415b",
+                        foreground: "#ffffff",
+                        "100": "#2d2d40", // Darkest
+                        "200": "#353549",
+                        "300": "#3d3d52",
+                        "400": "#41415b", // Original color
+                        "500": "#494964",
+                        "600": "#51516d",
+                        "700": "#595976",
+                        "800": "#61617f",
+                        "900": "#696988", // Lightest
+                    },
                 }
             },
             // Colorblind-friendly themes
