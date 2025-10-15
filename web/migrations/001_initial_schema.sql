@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS servers (
     listen_port INTEGER,
     status TEXT NOT NULL DEFAULT 'stopped',
     binary_path TEXT NOT NULL,
+    startup_command TEXT,
+    runtime_id TEXT,
+    main_executable TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
@@ -36,6 +39,17 @@ CREATE TABLE IF NOT EXISTS server_certificates (
     FOREIGN KEY (certificate_id) REFERENCES certificates(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS runtimes (
+    id TEXT PRIMARY KEY NOT NULL,
+    name TEXT NOT NULL,
+    display_name TEXT NOT NULL,
+    version TEXT NOT NULL,
+    executable_path TEXT NOT NULL,
+    runtime_type TEXT NOT NULL, -- 'java', 'dotnet', 'nodejs', 'python', 'binary'
+    detected_at TEXT NOT NULL,
+    is_available INTEGER NOT NULL DEFAULT 1
+);
+
 CREATE TABLE IF NOT EXISTS resource_metrics (
     id TEXT PRIMARY KEY NOT NULL,
     server_id TEXT NOT NULL,
@@ -52,3 +66,5 @@ CREATE INDEX IF NOT EXISTS idx_servers_domain ON servers(domain);
 CREATE INDEX IF NOT EXISTS idx_servers_status ON servers(status);
 CREATE INDEX IF NOT EXISTS idx_certificates_domain ON certificates(domain);
 CREATE INDEX IF NOT EXISTS idx_resource_metrics_server_timestamp ON resource_metrics(server_id, timestamp);
+CREATE INDEX IF NOT EXISTS idx_runtimes_type ON runtimes(runtime_type);
+CREATE INDEX IF NOT EXISTS idx_runtimes_available ON runtimes(is_available);
