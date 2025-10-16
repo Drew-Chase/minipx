@@ -32,13 +32,15 @@ use zip::ZipWriter;
                   - all: Build for all platforms"
 )]
 struct Args {
-    /// Target platform (e.g., aarch64-unknown-linux-gnu, x86_64-unknown-linux-gnu, or "all" for all platforms)
-    #[arg(short, long, default_value = "all")]
-    target: String,
+    /// Target platform(s) (e.g., aarch64-unknown-linux-gnu, x86_64-unknown-linux-gnu, or "all" for all platforms)
+    /// Can specify multiple targets: --target x86_64-unknown-linux-gnu --target aarch64-unknown-linux-gnu
+    #[arg(short, long, default_value = "all", num_args = 1..)]
+    target: Vec<String>,
 
-    /// Build variant: cli, cli-webui, web, or all
-    #[arg(short = 'v', long, default_value = "all")]
-    variant: Variant,
+    /// Build variant(s): cli, cli-webui, web, or all
+    /// Can specify multiple variants: --variant cli --variant web
+    #[arg(short = 'v', long, default_value = "all", num_args = 1..)]
+    variant: Vec<Variant>,
 
     /// Clean build artifacts before building
     #[arg(short, long)]
@@ -51,6 +53,10 @@ struct Args {
     /// Verbose output
     #[arg(long)]
     verbose: bool,
+
+    /// Run builds in parallel (faster but uses more resources)
+    #[arg(long)]
+    parallel: bool,
 }
 
 #[derive(Debug, Clone, clap::ValueEnum)]
@@ -72,13 +78,14 @@ impl Variant {
     }
 }
 
-const ALL_TARGETS: &[&str] = &[
-    "x86_64-unknown-linux-gnu",
-    "aarch64-unknown-linux-gnu",
-    "x86_64-apple-darwin",
-    "aarch64-apple-darwin",
-    "x86_64-pc-windows-msvc",
-];
+const ALL_TARGETS: &[&str] =
+    &[
+        "x86_64-unknown-linux-gnu",
+        "aarch64-unknown-linux-gnu",
+//        "x86_64-apple-darwin",
+//        "aarch64-apple-darwin",
+        "x86_64-pc-windows-msvc"
+    ];
 
 #[derive(Debug, Clone)]
 struct BuildResult {
@@ -94,11 +101,18 @@ struct BuildResult {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let targets = if args.target.to_lowercase() == "all" {
-        ALL_TARGETS.to_vec()
-    } else {
-        vec![args.target.as_str()]
-    };
+    // Expand "all" in targets
+    let mut targets = Vec::new();
+    for target in &args.target {
+        if target.to_lowercase() == "all" {
+            targets.extend(ALL_TARGETS.iter().map(|s| s.to_string()));
+        } else {
+            targets.push(target.clone());
+        }
+    }
+    // Remove duplicates
+    targets.sort();
+    targets.dedup();
 
     println!("{}", "=".repeat(60).cyan());
     println!("{}", "Minipx Cross-Compilation Tool".cyan().bold());
@@ -110,6 +124,7 @@ async fn main() -> Result<()> {
     check_cross().await?;
 
     for target in &targets {
+        check_toolchain(target).await?;
         check_target(target).await?;
     }
 
@@ -118,49 +133,137 @@ async fn main() -> Result<()> {
     }
 
     println!();
-    println!("{} Starting parallel builds...", "[BUILD]".cyan().bold());
+    if args.parallel {
+        println!("{} Starting parallel builds...", "[BUILD]".cyan().bold());
+    } else {
+        println!("{} Starting sequential builds...", "[BUILD]".cyan().bold());
+    }
     println!();
 
     // Setup progress bars
     let multi_progress = Arc::new(MultiProgress::new());
     let results = Arc::new(Mutex::new(Vec::new()));
 
-    // Build variants to build
-    let variants = match args.variant {
-        Variant::All => vec![Variant::Cli, Variant::CliWebui, Variant::Web],
-        ref v => vec![v.clone()],
-    };
+    // Expand "all" in variants
+    let mut variants = Vec::new();
+    for variant in &args.variant {
+        match variant {
+            Variant::All => {
+                variants.push(Variant::Cli);
+                variants.push(Variant::CliWebui);
+                variants.push(Variant::Web);
+            }
+            v => variants.push(v.clone()),
+        }
+    }
+    // Remove duplicates
+    variants.sort_by_key(|v| v.as_str().to_string());
+    variants.dedup_by_key(|v| v.as_str().to_string());
 
-    // Create tasks for each target-variant combination
-    let mut tasks = Vec::new();
+    if args.parallel {
+        // Parallel execution: spawn all tasks and wait for them
+        let mut tasks = Vec::new();
 
-    for target in &targets {
-        for variant in &variants {
-            let target = target.to_string();
-            let variant = variant.clone();
-            let mp = Arc::clone(&multi_progress);
-            let results = Arc::clone(&results);
+        for target in &targets {
+            for variant in &variants {
+                let target = target.to_string();
+                let variant = variant.clone();
+                let mp = Arc::clone(&multi_progress);
+                let results = Arc::clone(&results);
 
-            let task = tokio::spawn(async move {
-                let pb = mp.add(ProgressBar::new_spinner());
-                pb.set_style(
-                    ProgressStyle::default_spinner()
-                        .template("{spinner:.cyan} {msg}")
-                        .unwrap()
-                );
+                let task = tokio::spawn(async move {
+                    let pb = mp.add(ProgressBar::new_spinner());
+                    pb.set_style(ProgressStyle::default_spinner().template("{spinner:.cyan} {msg}").unwrap());
+
+                    let variant_str = variant.as_str();
+                    let display_name = format!("{} ({})", target, variant_str);
+                    pb.set_message(display_name.clone());
+                    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+
+                    let build_result = build_target_variant(&target, &variant).await;
+
+                    match &build_result {
+                        Ok(binaries) => {
+                            pb.finish_with_message(format!("{} {}", "✓".green(), display_name));
+                            results.lock().await.push(BuildResult {
+                                target: target.clone(),
+                                variant: variant_str.to_string(),
+                                success: true,
+                                binaries: binaries.clone(),
+                            });
+                        }
+                        Err(e) => {
+                            pb.finish_with_message(format!("{} {} - {}", "✗".red(), display_name, e));
+                            results.lock().await.push(BuildResult {
+                                target: target.clone(),
+                                variant: variant_str.to_string(),
+                                success: false,
+                                binaries: Vec::new(),
+                            });
+                        }
+                    }
+
+                    build_result
+                });
+
+                tasks.push(task);
+            }
+        }
+
+        // Wait for all tasks to complete, or handle Ctrl+C
+        let build_future = join_all(tasks);
+
+        tokio::select! {
+            _ = build_future => {
+                // Builds completed normally
+            }
+            _ = tokio::signal::ctrl_c() => {
+                println!();
+                println!();
+                println!("{} Build cancelled - cleaning up Docker containers...", "[CANCEL]".yellow().bold());
+
+                // Stop all running Docker containers started by cross
+                if let Ok(output) = Command::new("docker")
+                    .args(["ps", "-a", "--filter", "label=cross", "-q"])
+                    .output()
+                    .await
+                {
+                    let container_ids = String::from_utf8_lossy(&output.stdout);
+                    for container_id in container_ids.lines().filter(|line| !line.is_empty()) {
+                        let _ = Command::new("docker")
+                            .args(["stop", container_id])
+                            .output()
+                            .await;
+                        let _ = Command::new("docker")
+                            .args(["rm", container_id])
+                            .output()
+                            .await;
+                    }
+                }
+
+                println!("{} Cleanup complete", "[DONE]".green().bold());
+                std::process::exit(130); // Standard exit code for SIGINT
+            }
+        }
+    } else {
+        // Sequential execution: build one at a time
+        for target in &targets {
+            for variant in &variants {
+                let pb = multi_progress.add(ProgressBar::new_spinner());
+                pb.set_style(ProgressStyle::default_spinner().template("{spinner:.cyan} {msg}")?);
 
                 let variant_str = variant.as_str();
                 let display_name = format!("{} ({})", target, variant_str);
                 pb.set_message(display_name.clone());
                 pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
-                let build_result = build_target_variant(&target, &variant).await;
+                let build_result = build_target_variant(target, variant).await;
 
                 match &build_result {
                     Ok(binaries) => {
                         pb.finish_with_message(format!("{} {}", "✓".green(), display_name));
                         results.lock().await.push(BuildResult {
-                            target: target.clone(),
+                            target: target.to_string(),
                             variant: variant_str.to_string(),
                             success: true,
                             binaries: binaries.clone(),
@@ -169,54 +272,14 @@ async fn main() -> Result<()> {
                     Err(e) => {
                         pb.finish_with_message(format!("{} {} - {}", "✗".red(), display_name, e));
                         results.lock().await.push(BuildResult {
-                            target: target.clone(),
+                            target: target.to_string(),
                             variant: variant_str.to_string(),
                             success: false,
                             binaries: Vec::new(),
                         });
                     }
                 }
-
-                build_result
-            });
-
-            tasks.push(task);
-        }
-    }
-
-    // Wait for all tasks to complete, or handle Ctrl+C
-    let build_future = join_all(tasks);
-
-    tokio::select! {
-        _ = build_future => {
-            // Builds completed normally
-        }
-        _ = tokio::signal::ctrl_c() => {
-            println!();
-            println!();
-            println!("{} Build cancelled - cleaning up Docker containers...", "[CANCEL]".yellow().bold());
-
-            // Stop all running Docker containers started by cross
-            if let Ok(output) = Command::new("docker")
-                .args(["ps", "-a", "--filter", "label=cross", "-q"])
-                .output()
-                .await
-            {
-                let container_ids = String::from_utf8_lossy(&output.stdout);
-                for container_id in container_ids.lines().filter(|line| !line.is_empty()) {
-                    let _ = Command::new("docker")
-                        .args(["stop", container_id])
-                        .output()
-                        .await;
-                    let _ = Command::new("docker")
-                        .args(["rm", container_id])
-                        .output()
-                        .await;
-                }
             }
-
-            println!("{} Cleanup complete", "[DONE]".green().bold());
-            std::process::exit(130); // Standard exit code for SIGINT
         }
     }
 
@@ -230,32 +293,16 @@ async fn main() -> Result<()> {
     let failed = results.iter().filter(|r| !r.success).count();
 
     if failed == 0 {
-        println!(
-            "{} All builds completed successfully!",
-            "[COMPLETE]".green().bold()
-        );
-        println!(
-            "{}  Built {} target(s) with {} variant(s)",
-            " ".repeat(11),
-            targets.len(),
-            variants.len()
-        );
+        println!("{} All builds completed successfully!", "[COMPLETE]".green().bold());
+        println!("{}  Built {} target(s) with {} variant(s)", " ".repeat(11), targets.len(), variants.len());
     } else {
-        println!(
-            "{} Builds completed with {} successes and {} failures",
-            "[COMPLETE]".yellow().bold(),
-            successful,
-            failed
-        );
+        println!("{} Builds completed with {} successes and {} failures", "[COMPLETE]".yellow().bold(), successful, failed);
     }
 
     // Handle archiving
     if args.archive && !results.is_empty() {
         println!();
-        let all_binaries: Vec<BuildResult> = results.iter()
-            .filter(|r| r.success)
-            .cloned()
-            .collect();
+        let all_binaries: Vec<BuildResult> = results.iter().filter(|r| r.success).cloned().collect();
 
         if !all_binaries.is_empty() {
             archive_all_binaries(&all_binaries).await?;
@@ -264,20 +311,10 @@ async fn main() -> Result<()> {
 
     println!();
     if args.archive {
-        println!(
-            "{}  Binaries: target/<target>/release/",
-            " ".repeat(6)
-        );
-        println!(
-            "{}  Archives: {}",
-            " ".repeat(6),
-            "target/dist/".cyan()
-        );
+        println!("{}  Binaries: target/<target>/release/", " ".repeat(6));
+        println!("{}  Archives: {}", " ".repeat(6), "target/dist/".cyan());
     } else {
-        println!(
-            "{}  Binaries: target/<target>/release/",
-            " ".repeat(6)
-        );
+        println!("{}  Binaries: target/<target>/release/", " ".repeat(6));
     }
 
     if failed > 0 {
@@ -312,12 +349,7 @@ async fn check_cross() -> Result<()> {
     print!("{} Checking cross... ", "[CHECK]".blue().bold());
     std::io::stdout().flush().ok();
 
-    let output = Command::new("cross")
-        .arg("--version")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await;
+    let output = Command::new("cross").arg("--version").stdout(Stdio::null()).stderr(Stdio::null()).status().await;
 
     match output {
         Ok(status) if status.success() => {
@@ -335,17 +367,46 @@ async fn check_cross() -> Result<()> {
     }
 }
 
-async fn check_target(target: &str) -> Result<()> {
-    let output = Command::new("rustup")
-        .args(["target", "list"])
-        .output()
-        .await
-        .context("Failed to run rustup command")?;
+async fn check_toolchain(target: &str) -> Result<()> {
+    print!("{} Checking rustup toolchain... ", "[CHECK]".blue().bold());
+    std::io::stdout().flush().ok();
+
+    // Check if stable toolchain is installed
+    let output = Command::new("rustup").args(["toolchain", "list"]).output().await.context("Failed to run rustup command")?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let target_installed = stdout
-        .lines()
-        .any(|line| line.contains(target) && line.contains("(installed)"));
+    let stable_installed = stdout.lines().any(|line| line.starts_with("stable") && line.contains(target));
+
+    if !stable_installed {
+        println!("{}", "[!]".yellow().bold());
+        print!("{} Installing stable toolchain with minimal profile... ", "[INFO]".yellow().bold());
+        std::io::stdout().flush().ok();
+
+        let status = Command::new("rustup")
+            .args(["toolchain", "install", format!("stable-{}", target).as_str(), "--profile", "minimal", "--force-non-host"])
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .await
+            .context("Failed to install toolchain")?;
+
+        if !status.success() {
+            println!("{}", "[✗]".red().bold());
+            bail!("Failed to install stable toolchain");
+        }
+        println!("{}", "[✓]".green().bold());
+    } else {
+        println!("{}", "[✓]".green().bold());
+    }
+
+    Ok(())
+}
+
+async fn check_target(target: &str) -> Result<()> {
+    let output = Command::new("rustup").args(["target", "list"]).output().await.context("Failed to run rustup command")?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let target_installed = stdout.lines().any(|line| line.contains(target) && line.contains("(installed)"));
 
     if !target_installed {
         print!("{} Adding target {}... ", "[INFO]".yellow().bold(), target);
@@ -373,13 +434,8 @@ async fn clean_build() -> Result<()> {
     print!("{} Cleaning build artifacts... ", "[CLEAN]".yellow().bold());
     std::io::stdout().flush().ok();
 
-    let status = Command::new("cargo")
-        .arg("clean")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .await
-        .context("Failed to run cargo clean")?;
+    let status =
+        Command::new("cargo").arg("clean").stdout(Stdio::null()).stderr(Stdio::null()).status().await.context("Failed to run cargo clean")?;
 
     if !status.success() {
         println!("{}", "[✗]".red().bold());
@@ -403,20 +459,17 @@ async fn build_target_variant(target: &str, variant: &Variant) -> Result<Vec<Bui
     // Create logs directory
     let logs_dir = Path::new("target/logs");
     fs::create_dir_all(logs_dir).context("Failed to create logs directory")?;
-    let logs_dir_abs = logs_dir.canonicalize()
-        .unwrap_or_else(|_| logs_dir.to_path_buf());
+    let logs_dir_abs = logs_dir.canonicalize().unwrap_or_else(|_| logs_dir.to_path_buf());
 
     match variant {
         Variant::Cli => {
             let log_file_path = logs_dir.join(format!("minipx-cli-{}.log", target));
             let log_file_path_abs = logs_dir_abs.join(format!("minipx-cli-{}.log", target));
-            let log_file = File::create(&log_file_path)
-                .context("Failed to create log file")?;
-            let log_file_stderr = log_file.try_clone()
-                .context("Failed to clone log file handle")?;
+            let log_file = File::create(&log_file_path).context("Failed to create log file")?;
+            let log_file_stderr = log_file.try_clone().context("Failed to clone log file handle")?;
 
             let status = Command::new("cross")
-                .args(["build", "--release", "--target", target, "-p", "minipx_cli"])
+                .args(["build", "--release", "--target", target, "-p", "minipx_cli", "--features", "openssl/vendored"])
                 .stdout(Stdio::from(log_file))
                 .stderr(Stdio::from(log_file_stderr))
                 .status()
@@ -430,31 +483,16 @@ async fn build_target_variant(target: &str, variant: &Variant) -> Result<Vec<Bui
             let binary_name = if target.contains("windows") { "minipx.exe" } else { "minipx" };
             let binary_path = PathBuf::from(format!("target/{}/release/{}", target, binary_name));
 
-            binaries.push(BuiltBinary {
-                path: binary_path,
-                variant: "cli".to_string(),
-                target: target.to_string(),
-            });
+            binaries.push(BuiltBinary { path: binary_path, variant: "cli".to_string(), target: target.to_string() });
         }
         Variant::CliWebui => {
             let log_file_path = logs_dir.join(format!("minipx-cli-webui-{}.log", target));
             let log_file_path_abs = logs_dir_abs.join(format!("minipx-cli-webui-{}.log", target));
-            let log_file = File::create(&log_file_path)
-                .context("Failed to create log file")?;
-            let log_file_stderr = log_file.try_clone()
-                .context("Failed to clone log file handle")?;
+            let log_file = File::create(&log_file_path).context("Failed to create log file")?;
+            let log_file_stderr = log_file.try_clone().context("Failed to clone log file handle")?;
 
             let status = Command::new("cross")
-                .args([
-                    "build",
-                    "--release",
-                    "--target",
-                    target,
-                    "-p",
-                    "minipx_cli",
-                    "--features",
-                    "webui",
-                ])
+                .args(["build", "--release", "--target", target, "-p", "minipx_cli", "--features", "webui openssl/vendored"])
                 .stdout(Stdio::from(log_file))
                 .stderr(Stdio::from(log_file_stderr))
                 .status()
@@ -468,22 +506,16 @@ async fn build_target_variant(target: &str, variant: &Variant) -> Result<Vec<Bui
             let binary_name = if target.contains("windows") { "minipx.exe" } else { "minipx" };
             let binary_path = PathBuf::from(format!("target/{}/release/{}", target, binary_name));
 
-            binaries.push(BuiltBinary {
-                path: binary_path,
-                variant: "cli-webui".to_string(),
-                target: target.to_string(),
-            });
+            binaries.push(BuiltBinary { path: binary_path, variant: "cli-webui".to_string(), target: target.to_string() });
         }
         Variant::Web => {
             let log_file_path = logs_dir.join(format!("minipx-web-{}.log", target));
             let log_file_path_abs = logs_dir_abs.join(format!("minipx-web-{}.log", target));
-            let log_file = File::create(&log_file_path)
-                .context("Failed to create log file")?;
-            let log_file_stderr = log_file.try_clone()
-                .context("Failed to clone log file handle")?;
+            let log_file = File::create(&log_file_path).context("Failed to create log file")?;
+            let log_file_stderr = log_file.try_clone().context("Failed to clone log file handle")?;
 
             let status = Command::new("cross")
-                .args(["build", "--release", "--target", target, "-p", "minipx_web"])
+                .args(["build", "--release", "--target", target, "-p", "minipx_web", "--features", "openssl/vendored"])
                 .stdout(Stdio::from(log_file))
                 .stderr(Stdio::from(log_file_stderr))
                 .status()
@@ -497,11 +529,7 @@ async fn build_target_variant(target: &str, variant: &Variant) -> Result<Vec<Bui
             let binary_name = if target.contains("windows") { "minipx_web.exe" } else { "minipx_web" };
             let binary_path = PathBuf::from(format!("target/{}/release/{}", target, binary_name));
 
-            binaries.push(BuiltBinary {
-                path: binary_path,
-                variant: "web".to_string(),
-                target: target.to_string(),
-            });
+            binaries.push(BuiltBinary { path: binary_path, variant: "web".to_string(), target: target.to_string() });
         }
         Variant::All => {
             // This shouldn't happen as we split All into individual variants
@@ -537,11 +565,7 @@ async fn archive_all_binaries(build_results: &[BuildResult]) -> Result<()> {
                 let archive_path = Path::new("target/dist").join(&archive_name);
 
                 let pb = mp.add(ProgressBar::new_spinner());
-                pb.set_style(
-                    ProgressStyle::default_spinner()
-                        .template("{spinner:.cyan} {msg}")
-                        .unwrap()
-                );
+                pb.set_style(ProgressStyle::default_spinner().template("{spinner:.cyan} {msg}").unwrap());
                 pb.set_message(format!("Archiving {}", archive_name));
                 pb.enable_steady_tick(std::time::Duration::from_millis(100));
 
@@ -560,25 +584,17 @@ async fn archive_all_binaries(build_results: &[BuildResult]) -> Result<()> {
                 };
                 let mut zip = ZipWriter::new(file);
 
-                let options = SimpleFileOptions::default()
-                    .compression_method(zip::CompressionMethod::Deflated)
-                    .unix_permissions(0o755);
+                let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated).unix_permissions(0o755);
 
-                let binary_name = binary.path.file_name()
-                    .context("Failed to get binary filename")?
-                    .to_string_lossy();
+                let binary_name = binary.path.file_name().context("Failed to get binary filename")?.to_string_lossy();
 
-                zip.start_file(binary_name.as_ref(), options)
-                    .context("Failed to start file in zip")?;
+                zip.start_file(binary_name.as_ref(), options).context("Failed to start file in zip")?;
 
-                let binary_contents = fs::read(&binary.path)
-                    .context(format!("Failed to read binary: {}", binary.path.display()))?;
+                let binary_contents = fs::read(&binary.path).context(format!("Failed to read binary: {}", binary.path.display()))?;
 
-                zip.write_all(&binary_contents)
-                    .context("Failed to write binary to zip")?;
+                zip.write_all(&binary_contents).context("Failed to write binary to zip")?;
 
-                zip.finish()
-                    .context("Failed to finalize zip archive")?;
+                zip.finish().context("Failed to finalize zip archive")?;
 
                 pb.finish_with_message(format!("{} {}", "✓".green(), archive_name));
                 Ok(())
@@ -644,11 +660,7 @@ fn create_log_link(log_path: &Path) -> String {
     let url_path = clean_path.replace('\\', "/");
 
     // Create OSC 8 hyperlink: \x1b]8;;file://path\x1b\\text\x1b]8;;\x1b\\
-    let link = format!(
-        "\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\",
-        url_path,
-        "[open log]".cyan().bold()
-    );
+    let link = format!("\x1b]8;;file://{}\x1b\\{}\x1b]8;;\x1b\\", url_path, "[open log]".cyan().bold());
 
     format!("Build failed - {}", link)
 }
