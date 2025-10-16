@@ -27,6 +27,7 @@ pub async fn proxy_websocket(
     upstream_port: u16,
     subroute_path: &str,
     domain: &str,
+    frontend_scheme: &str,
 ) -> Result<Response<Body>> {
     // Build upstream URI: strip subroute path if present, then add requested path_and_query
     let suffix = req.uri().path_and_query().map(|pq| pq.as_str()).unwrap_or("/");
@@ -68,6 +69,16 @@ pub async fn proxy_websocket(
         } else {
             builder = builder.header(XFF, client_ip.to_string());
         }
+
+        // Add other forwarding headers
+        builder = builder.header("x-real-ip", client_ip.to_string());
+        builder = builder.header("x-forwarded-proto", frontend_scheme);
+        builder = builder.header("x-forwarded-host", domain);
+
+        debug!(
+            "Added WS forwarding headers: X-Forwarded-For={}, X-Real-IP={}, X-Forwarded-Proto={}, X-Forwarded-Host={}",
+            client_ip, client_ip, frontend_scheme, domain
+        );
 
         // Log key incoming WS headers for diagnostics
         let h = |n: &str| headers.get(n).and_then(|v| v.to_str().ok()).unwrap_or("-");

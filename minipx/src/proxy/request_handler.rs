@@ -108,8 +108,33 @@ pub async fn handle_request_with_scheme(frontend_scheme: &str, client_ip: IpAddr
         let (ws_host, ws_port) = if let Some(sub) = sub_route.clone() { (route.get_host(), sub.port) } else { (route.get_host(), route.get_port()) };
 
         let subroute_path = sub_route.map(|s| s.path).unwrap_or_default();
-        return proxy_websocket(client_ip, req, upstream_scheme, ws_host, ws_port, &subroute_path, &domain).await;
+        return proxy_websocket(client_ip, req, upstream_scheme, ws_host, ws_port, &subroute_path, &domain, frontend_scheme).await;
     }
+
+    // Add proper forwarding headers
+    let headers = req.headers_mut();
+
+    // Set X-Forwarded-For header (append client IP if header exists, otherwise create new)
+    if let Some(xff) = headers.get("x-forwarded-for") {
+        if let Ok(xff_str) = xff.to_str() {
+            let new_xff = format!("{}, {}", xff_str, client_ip);
+            headers.insert("x-forwarded-for", new_xff.parse().unwrap());
+        }
+    } else {
+        headers.insert("x-forwarded-for", client_ip.to_string().parse().unwrap());
+    }
+
+    // Set X-Real-IP header (client's actual IP)
+    headers.insert("x-real-ip", client_ip.to_string().parse().unwrap());
+
+    // Set X-Forwarded-Proto header (http or https)
+    headers.insert("x-forwarded-proto", frontend_scheme.parse().unwrap());
+
+    // Set X-Forwarded-Host header (original Host header)
+    headers.insert("x-forwarded-host", domain.parse().unwrap());
+
+    debug!("Added forwarding headers: X-Forwarded-For={}, X-Real-IP={}, X-Forwarded-Proto={}, X-Forwarded-Host={}",
+           client_ip, client_ip, frontend_scheme, domain);
 
     match hyper_reverse_proxy::call(client_ip, target.as_str(), req).await {
         Ok(response) => Ok(response),
