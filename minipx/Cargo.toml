@@ -19,3 +19,6 @@ log = "0.4.27"
 notify = { version = "8.2.0" }
 tokio-stream = { version = "0.1", features = ["net"] }
 interprocess = { version = "2.2.3", features = ["tokio", "async"] }
+
+[target.'cfg(not(target_os = "windows"))'.dependencies]
+openssl = { version = "0.10", features = ["vendored"] }

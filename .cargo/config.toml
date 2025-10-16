@@ -1,0 +1,2 @@
+[alias]
+cross-build = "run --package cross-build-tool --release --"

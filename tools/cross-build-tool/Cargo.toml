@@ -1,0 +1,18 @@
+[package]
+name = "cross-build-tool"
+version = "0.1.0"
+edition = "2024"
+description = "A tool for cross-compiling the minipx project."
+
+[[bin]]
+name = "cross-build-tool"
+path = "src/main.rs"
+
+[dependencies]
+clap = { version = "4", features = ["derive", "color", "help", "suggestions", "wrap_help", "error-context", "usage", "string", "unicode"] }
+anyhow = "1.0"
+colored = "3.0.0"
+zip = { version = "2.2", default-features = false, features = ["deflate"] }
+tokio = { version = "1", features = ["rt-multi-thread", "process", "sync", "macros", "signal"] }
+indicatif = "0.17"
+futures = "0.3"

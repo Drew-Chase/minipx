@@ -1,0 +1,10 @@
+# Cross-compilation configuration for minipx
+# This file configures the cross tool for cross-platform builds
+
+# ARM64 Linux target configuration
+[target.aarch64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/aarch64-unknown-linux-gnu:latest"
+
+# x86_64 Linux target configuration
+[target.x86_64-unknown-linux-gnu]
+image = "ghcr.io/cross-rs/x86_64-unknown-linux-gnu:latest"

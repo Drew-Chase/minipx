@@ -1,3 +1,3 @@
 [workspace]
 resolver = "3"
-members = ["cli", "minipx", "web"]
+members = ["cli", "minipx", "tools/cross-build-tool", "web"]

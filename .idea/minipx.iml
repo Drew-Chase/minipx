@@ -8,6 +8,7 @@
       <sourceFolder url="file://$MODULE_DIR$/minipx/examples" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/minipx/src" isTestSource="false" />
       <sourceFolder url="file://$MODULE_DIR$/web/src" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/tools/cross-build-tool/src" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/target" />
       <excludeFolder url="file://$MODULE_DIR$/tools/build-archiver/target" />
       <excludeFolder url="file://$MODULE_DIR$/web/target" />
